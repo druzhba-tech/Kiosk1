@@ -196,12 +196,9 @@ fun KioskStatusBar(
             }
 
             val batteryIcon: ImageVector = when {
-                isCharging           -> Icons.Default.BatteryChargingFull
-                batteryLevel >= 90   -> Icons.Default.BatteryFull
-                batteryLevel >= 60   -> Icons.Default.Battery6Bar
-                batteryLevel >= 40   -> Icons.Default.Battery4Bar
-                batteryLevel >= 20   -> Icons.Default.Battery2Bar
-                else                 -> Icons.Default.Battery0Bar
+                isCharging        -> Icons.Default.BatteryChargingFull
+                batteryLevel < 15 -> Icons.Default.BatteryAlert
+                else              -> Icons.Default.BatteryFull
             }
             val batteryColor = when {
                 batteryLevel < 15 -> NeonRed
@@ -227,26 +224,22 @@ fun KioskStatusBar(
 
 @Composable
 private fun WifiSignalIcon(level: Int) {
-    val icon = when (level) {
-        0    -> Icons.Default.SignalWifi0Bar
-        1    -> Icons.Default.SignalWifi1Bar
-        2    -> Icons.Default.SignalWifi2Bar
-        3    -> Icons.Default.SignalWifi3Bar
-        else -> Icons.Default.Wifi
-    }
-    Icon(icon, contentDescription = "WiFi $level", tint = NeonCyan, modifier = Modifier.size(13.dp))
+    Icon(
+        Icons.Default.Wifi,
+        contentDescription = "WiFi $level",
+        tint = NeonCyan,
+        modifier = Modifier.size(13.dp)
+    )
 }
 
 @Composable
 private fun MobileSignalIcon(level: Int) {
-    val icon = when (level) {
-        0    -> Icons.Default.SignalCellular0Bar
-        1    -> Icons.Default.SignalCellular1Bar
-        2    -> Icons.Default.SignalCellular2Bar
-        3    -> Icons.Default.SignalCellular3Bar
-        else -> Icons.Default.SignalCellular4Bar
-    }
-    Icon(icon, contentDescription = "Mobile $level", tint = NeonCyan, modifier = Modifier.size(13.dp))
+    Icon(
+        Icons.Default.SignalCellularAlt,
+        contentDescription = "Mobile $level",
+        tint = NeonCyan,
+        modifier = Modifier.size(13.dp)
+    )
 }
 
 private fun getCurrentTime(): String =

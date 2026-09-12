@@ -90,7 +90,7 @@ class KioskMqttClient(
 
     fun disconnect() {
         try {
-            client?.disconnect()?.send()
+            client?.disconnect()
             client = null
         } catch (e: Exception) {
             e.printStackTrace()

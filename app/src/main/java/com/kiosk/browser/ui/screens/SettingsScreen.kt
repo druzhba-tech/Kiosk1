@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiosk.browser.MainActivity
 import com.kiosk.browser.data.model.KioskConfig
+import com.kiosk.browser.ui.components.AppPickerDialog
 import com.kiosk.browser.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +52,8 @@ fun SettingsScreen(
     var blockKeys by remember { mutableStateOf(currentConfig.blockHardwareKeys) }
     var antiTheft by remember { mutableStateOf(currentConfig.antiTheftAlarmEnabled) }
     var mqttEnabled by remember { mutableStateOf(currentConfig.mqttEnabled) }
+    var allowedApps by remember { mutableStateOf(currentConfig.allowedApps) }
+    var showAppPicker by remember { mutableStateOf(false) }
 
     fun saveAll() {
         mainActivity.configRepository.updateConfig {
@@ -68,7 +71,8 @@ fun SettingsScreen(
                 ignoreSslErrors = ignoreSsl,
                 blockHardwareKeys = blockKeys,
                 antiTheftAlarmEnabled = antiTheft,
-                mqttEnabled = mqttEnabled
+                mqttEnabled = mqttEnabled,
+                allowedApps = allowedApps
             )
         }
         mainActivity.applyConfigUpdates()
@@ -114,6 +118,70 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ── ГЛАВНАЯ КНОПКА: Включить/Выключить режим киоска ──────────────
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = if (isKiosk) 1.5.dp else 0.5.dp,
+                        color = if (isKiosk) NeonGreen else NeonOrange,
+                        shape = RoundedCornerShape(16.dp)
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isKiosk)
+                        Color(0xFF0D2018)  // тёмно-зелёный при активном киоске
+                    else
+                        Color(0xFF1A1208)  // тёмно-оранжевый при неактивном
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            if (isKiosk) Icons.Default.Lock else Icons.Default.LockOpen,
+                            contentDescription = null,
+                            tint = if (isKiosk) NeonGreen else NeonOrange,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Column {
+                            Text(
+                                text = if (isKiosk) "KIOSK MODE АКТИВЕН" else "KIOSK MODE ВЫКЛЮЧЕН",
+                                color = if (isKiosk) NeonGreen else NeonOrange,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = if (isKiosk)
+                                    "Устройство заблокировано в режиме киоска"
+                                else
+                                    "Нажмите переключатель для включения",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isKiosk,
+                        onCheckedChange = { isKiosk = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = NeonGreen,
+                            checkedTrackColor = Color(0xFF1A4030),
+                            uncheckedThumbColor = NeonOrange,
+                            uncheckedTrackColor = Color(0xFF2A1A08)
+                        )
+                    )
+                }
+            }
+
             // Раздел: Основные параметры Web
             SettingsCard(title = "ВЕБ-СТРАНИЦА И БРАУЗЕР", icon = Icons.Default.Language) {
                 OutlinedTextField(
@@ -132,24 +200,107 @@ fun SettingsScreen(
                     checked = ignoreSsl,
                     onCheckedChange = { ignoreSsl = it }
                 )
+            }
 
+            // Раздел: Приложения и Лаунчер
+            SettingsCard(title = "ПРИЛОЖЕНИЯ И ЛАУНЧЕР", icon = Icons.Default.Apps) {
                 SettingsToggle(
                     title = "Одиночный режим (Single App)",
-                    subtitle = "Полноэкранная веб-страница без лаунчера приложений",
+                    subtitle = "Полноэкранная веб-страница без лаунчера других приложений",
                     checked = isSingleApp,
                     onCheckedChange = { isSingleApp = it }
                 )
+
+                if (!isSingleApp) {
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = { showAppPicker = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Apps, contentDescription = null, tint = CyberBlack)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (allowedApps.isEmpty()) "ВЫБРАТЬ ПРИЛОЖЕНИЯ (РАЗРЕШЕНЫ ВСЕ)"
+                            else "ВЫБРАТЬ ПРИЛОЖЕНИЯ (${allowedApps.size} ВЫБРАНО)",
+                            color = CyberBlack,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (allowedApps.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Разрешённые (${allowedApps.size}):",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                            TextButton(
+                                onClick = { allowedApps = emptyList() },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("Сбросить (все)", color = NeonOrange, fontSize = 11.sp)
+                            }
+                        }
+
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            items(allowedApps.size) { index ->
+                                val pkg = allowedApps[index]
+                                Surface(
+                                    color = CyberSurface,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, CyberBorder)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = pkg.substringAfterLast('.'),
+                                            color = TextWhite,
+                                            fontSize = 12.sp
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        IconButton(
+                                            onClick = { allowedApps = allowedApps - pkg },
+                                            modifier = Modifier.size(18.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = "Удалить",
+                                                tint = NeonRed,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Сейчас в лаунчере доступны все приложения планшета. Нажмите кнопку выше, чтобы разрешить только нужные.",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
             }
 
             // Раздел: Режим киоска и защита
             SettingsCard(title = "РЕЖИМ КИОСКА И БЕЗОПАСНОСТЬ", icon = Icons.Default.Security) {
-                SettingsToggle(
-                    title = "Включить Kiosk Mode",
-                    subtitle = "Блокировка системных панелей и удержание экрана",
-                    checked = isKiosk,
-                    onCheckedChange = { isKiosk = it }
-                )
-
                 SettingsToggle(
                     title = "Блокировка кнопок громкости",
                     subtitle = "Перехват аппаратных клавиш устройства",
@@ -301,6 +452,19 @@ fun SettingsScreen(
                 Text("ВЫЙТИ ИЗ РЕЖИМА КИОСКА (UNLOCK)")
             }
         }
+    }
+
+    if (showAppPicker) {
+        AppPickerDialog(
+            selectedPackages = allowedApps,
+            onConfirm = { selectedList ->
+                allowedApps = selectedList
+                showAppPicker = false
+            },
+            onDismiss = {
+                showAppPicker = false
+            }
+        )
     }
 }
 

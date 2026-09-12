@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Kiosk Browser</string>
+    <string name="app_name">Kiosk Gusar</string>
     <string name="device_admin_label">Kiosk Device Administrator</string>
     <string name="device_admin_description">Необходимо для включения режима киоска, защиты от сброса и блокировки системных клавиш.</string>
 </resources>

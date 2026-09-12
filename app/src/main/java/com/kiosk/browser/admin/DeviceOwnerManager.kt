@@ -18,6 +18,20 @@ class DeviceOwnerManager(private val context: Context) {
         get() = dpm.isAdminActive(adminComponent)
 
     /**
+     * Запрос прав администратора устройства через системный диалог
+     */
+    fun requestDeviceAdmin(activity: android.app.Activity) {
+        val intent = android.content.Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+            putExtra(
+                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                "Необходимо для включения блокировки режима киоска."
+            )
+        }
+        activity.startActivity(intent)
+    }
+
+    /**
      * Применение политик жесткой защиты (Safe Mode, USB, статус-бар)
      */
     fun applyKioskPolicies(

@@ -9,6 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -116,9 +117,20 @@ class MainActivity : ComponentActivity() {
                 val batteryLevel by batteryTracker.batteryLevel.collectAsState()
                 val isCharging by batteryTracker.isCharging.collectAsState()
 
+                // Блокировка системного жеста и кнопки Назад
+                BackHandler(enabled = config.isKioskEnabled) {
+                    // Глушим нажатие назад в режиме киоска
+                }
+
                 var showPinDialog by remember { mutableStateOf(false) }
                 var showSettings by remember { mutableStateOf(false) }
                 var isWebMode by remember { mutableStateOf(config.isSingleAppMode) }
+
+                LaunchedEffect(config.isSingleAppMode) {
+                    if (config.isSingleAppMode) {
+                        isWebMode = true
+                    }
+                }
 
                 // Регистрация коллбэка открытия настроек
                 openSettingsCallback = { showPinDialog = true }
@@ -127,7 +139,8 @@ class MainActivity : ComponentActivity() {
                     if (isWebMode || config.isSingleAppMode) {
                         KioskWebScreen(
                             mainActivity = this@MainActivity,
-                            onOpenSettingsRequested = { showPinDialog = true }
+                            onOpenSettingsRequested = { showPinDialog = true },
+                            onBackToLauncher = if (!config.isSingleAppMode) { { isWebMode = false } } else null
                         )
                     } else {
                         AppLauncherScreen(
@@ -190,19 +203,26 @@ class MainActivity : ComponentActivity() {
         // Антивор
         motionTracker.isAntiTheftEnabled = config.antiTheftAlarmEnabled
 
-        // Применение политик Device Owner (если есть права)
-        if (config.isKioskEnabled && deviceOwnerManager.isDeviceOwner) {
-            deviceOwnerManager.applyKioskPolicies(
-                blockSafeMode = config.blockSafeMode,
-                blockUsb = config.blockUsbFileTransfer,
-                disableStatusBar = config.blockSystemNavigation
-            )
+        // Применение режима киоска (блокировка экрана)
+        if (config.isKioskEnabled) {
+            if (deviceOwnerManager.isDeviceOwner) {
+                deviceOwnerManager.applyKioskPolicies(
+                    blockSafeMode = config.blockSafeMode,
+                    blockUsb = config.blockUsbFileTransfer,
+                    disableStatusBar = config.blockSystemNavigation
+                )
+            }
             try {
                 startLockTask()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
+    }
+
+    fun startKioskMode() {
+        configRepository.updateConfig { it.copy(isKioskEnabled = true) }
+        applyConfigUpdates()
     }
 
     fun exitKioskMode() {

@@ -17,7 +17,7 @@ import com.kiosk.browser.core.webview.JavaScriptBridge
 import com.kiosk.browser.core.webview.KioskWebChromeClient
 import com.kiosk.browser.core.webview.KioskWebViewClient
 import com.kiosk.browser.core.webview.UrlFilterManager
-import com.kiosk.browser.ui.components.HudStatusBadge
+import com.kiosk.browser.ui.components.KioskStatusBar
 import com.kiosk.browser.ui.components.SecretTapOverlay
 import com.kiosk.browser.ui.theme.NeonCyan
 import kotlin.math.roundToInt
@@ -25,7 +25,8 @@ import kotlin.math.roundToInt
 @Composable
 fun KioskWebScreen(
     mainActivity: MainActivity,
-    onOpenSettingsRequested: () -> Unit
+    onOpenSettingsRequested: () -> Unit,
+    onBackToLauncher: (() -> Unit)? = null
 ) {
     val config by mainActivity.configRepository.configFlow.collectAsState()
     val batteryLevel by mainActivity.batteryTracker.batteryLevel.collectAsState()
@@ -121,14 +122,13 @@ fun KioskWebScreen(
             )
         }
 
-        // HUD Индикатор батареи и киоска в левом верхнем углу
-        HudStatusBadge(
+        // Верхняя строка статуса: часы, WiFi/сигнал, батарея, статус киоска, кнопка перехода в лаунчер
+        KioskStatusBar(
             batteryLevel = batteryLevel,
             isCharging = isCharging,
             isKioskActive = config.isKioskEnabled,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(8.dp)
+            onLauncherClick = onBackToLauncher,
+            modifier = Modifier.align(Alignment.TopCenter)
         )
 
         // Скрытая зона тапа в правом верхнем углу (для вызова PIN-кода и настроек)

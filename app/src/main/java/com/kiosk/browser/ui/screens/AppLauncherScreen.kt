@@ -46,7 +46,7 @@ fun AppLauncherScreen(
     val appList = remember(allowedPackages) {
         val list = mutableListOf<LauncherItem>()
         // Добавляем встроенный браузер
-        list.add(LauncherItem("Kiosk Browser", context.packageName, isWeb = true))
+        list.add(LauncherItem("Kiosk Gusar", context.packageName, isWeb = true))
 
         val intent = Intent(Intent.ACTION_MAIN, null).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)

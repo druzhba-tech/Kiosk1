@@ -37,6 +37,16 @@ fun SettingsScreen(
     val clipboardManager = LocalClipboardManager.current
     val currentConfig by mainActivity.configRepository.configFlow.collectAsState()
 
+    val tfColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = NeonCyan,
+        unfocusedBorderColor = CyberBorder,
+        focusedLabelColor = NeonCyan,
+        unfocusedLabelColor = TextMuted,
+        cursorColor = NeonCyan,
+        focusedTextColor = TextWhite,
+        unfocusedTextColor = TextWhite
+    )
+
     var startUrl by remember { mutableStateOf(currentConfig.startUrl) }
     var pinCode by remember { mutableStateOf(currentConfig.pinCode) }
     var idleTimeout by remember { mutableStateOf(currentConfig.idleTimeoutSeconds.toString()) }
@@ -166,7 +176,7 @@ fun SettingsScreen(
                     value = startUrl,
                     onValueChange = { startUrl = it },
                     label = { Text("Стартовый URL") },
-                    colors = cyberTextFieldColors(),
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -226,7 +236,7 @@ fun SettingsScreen(
                         value = idleTimeout,
                         onValueChange = { idleTimeout = it },
                         label = { Text("Таймаут перехода в заставку (сек)") },
-                        colors = cyberTextFieldColors(),
+                        colors = tfColors,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -253,7 +263,7 @@ fun SettingsScreen(
                     value = pinCode,
                     onValueChange = { pinCode = it },
                     label = { Text("Мастер-PIN код (по умолчанию: 1234)") },
-                    colors = cyberTextFieldColors(),
+                    colors = tfColors,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -294,7 +304,7 @@ fun SettingsScreen(
                         value = mqttBroker,
                         onValueChange = { mqttBroker = it },
                         label = { Text("IP адрес MQTT брокера") },
-                        colors = cyberTextFieldColors(),
+                        colors = tfColors,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -302,7 +312,7 @@ fun SettingsScreen(
                         value = mqttPort,
                         onValueChange = { mqttPort = it },
                         label = { Text("Порт MQTT (по умолчанию 1883)") },
-                        colors = cyberTextFieldColors(),
+                        colors = tfColors,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -333,12 +343,12 @@ fun SettingsScreen(
 
     if (showAppPicker) {
         AppPickerDialog(
-            currentAllowed = allowedApps,
-            onDismiss = { showAppPicker = false },
+            selectedPackages = allowedApps,
             onConfirm = { selected ->
                 allowedApps = selected
                 showAppPicker = false
-            }
+            },
+            onDismiss = { showAppPicker = false }
         )
     }
 }
@@ -403,14 +413,3 @@ private fun SettingsToggle(
         )
     }
 }
-
-@Composable
-private fun cyberTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = NeonCyan,
-    unfocusedBorderColor = CyberBorder,
-    focusedLabelColor = NeonCyan,
-    unfocusedLabelColor = TextMuted,
-    cursorColor = NeonCyan,
-    focusedTextColor = TextWhite,
-    unfocusedTextColor = TextWhite
-)

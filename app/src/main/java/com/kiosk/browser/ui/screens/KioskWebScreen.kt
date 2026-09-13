@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.ui.screens
+package com.kiosk.browser.ui.screens
 
 import android.view.ViewGroup
 import android.webkit.WebSettings
@@ -34,7 +34,6 @@ fun KioskWebScreen(
 
     var loadProgress by remember { mutableStateOf(0) }
 
-    // Защита OLED: смещение на 1-2px раз в 3 минуты
     val pixelShiftAnim = rememberInfiniteTransition(label = "pixelShift")
     val shiftX by pixelShiftAnim.animateFloat(
         initialValue = -1.5f,
@@ -46,7 +45,6 @@ fun KioskWebScreen(
         label = "shiftX"
     )
 
-    // Корневой Box: WebView + оверлеи поверх него
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -55,7 +53,6 @@ fun KioskWebScreen(
                 else IntOffset.Zero
             }
     ) {
-        // ── WebView на весь экран ──────────────────────────────────────────
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
@@ -98,7 +95,6 @@ fun KioskWebScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // ── Прогресс загрузки ──────────────────────────────────────────────
         if (loadProgress in 1..99) {
             LinearProgressIndicator(
                 progress = loadProgress / 100f,
@@ -109,8 +105,6 @@ fun KioskWebScreen(
             )
         }
 
-        // ── HUD-виджет: вертикальный, левый верхний угол, отступ ~28dp ────
-        // ~28dp ≈ 1 см на стандартной плотности (160 dpi)
         KioskStatusBar(
             batteryLevel = batteryLevel,
             isCharging = isCharging,
@@ -118,10 +112,9 @@ fun KioskWebScreen(
             onLauncherClick = onBackToLauncher,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(top = 28.dp)   // ≈ 1 см отступ от верхнего края
+                .padding(top = 28.dp)
         )
 
-        // ── Секретная зона (5 тапов → PIN) — правый верхний угол ─────────
         SecretTapOverlay(
             onSecretTap = { mainActivity.secretGestureDetector.onSecretAreaTapped() },
             modifier = Modifier.align(Alignment.TopEnd)

@@ -96,7 +96,7 @@ fun KioskWebScreen(
                 webView.webViewClient = KioskWebViewClient(
                     filterManager = filterManager,
                     isIgnoreSslErrors = { config.ignoreSslErrors },
-                    onCrashRecover = { post { webView.loadUrl(config.startUrl) } },
+                    onCrashRecover = { webView.post { webView.loadUrl(config.startUrl) } },
                     onPageLoaded = { _ ->
                         // Завершаем анимацию свайпа после загрузки
                         swipeRefresh.isRefreshing = false

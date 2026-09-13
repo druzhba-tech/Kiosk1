@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.kiosk.browser.MainActivity
 import com.kiosk.browser.core.webview.JavaScriptBridge
 import com.kiosk.browser.core.webview.KioskWebChromeClient
@@ -55,7 +56,7 @@ fun KioskWebScreen(
     ) {
         AndroidView(
             factory = { context ->
-                WebView(context).apply {
+                val webView = WebView(context).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -71,26 +72,53 @@ fun KioskWebScreen(
                         mediaPlaybackRequiresUserGesture = false
                         cacheMode = WebSettings.LOAD_DEFAULT
                     }
-                    val filterManager = UrlFilterManager(config.allowedUrls, config.blockedUrls)
-                    webViewClient = KioskWebViewClient(
-                        filterManager = filterManager,
-                        isIgnoreSslErrors = { config.ignoreSslErrors },
-                        onCrashRecover = { post { loadUrl(config.startUrl) } },
-                        onPageLoaded = { _ -> }
-                    )
-                    webChromeClient = KioskWebChromeClient(
-                        onProgressChanged = { progress -> loadProgress = progress },
-                        onFullscreenRequested = { },
-                        onFullscreenExit = { }
-                    )
-                    val jsBridge = JavaScriptBridge(context, mainActivity.batteryTracker) { turnOn ->
-                        mainActivity.controlScreen(turnOn)
-                    }
-                    addJavascriptInterface(jsBridge, "kiosk")
-                    addJavascriptInterface(jsBridge, "fully")
-                    loadUrl(config.startUrl)
-                    mainActivity.currentWebView = this
                 }
+
+                val swipeRefresh = SwipeRefreshLayout(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    setColorSchemeColors(android.graphics.Color.parseColor("#00F0FF"))
+                    setProgressBackgroundColorSchemeColor(android.graphics.Color.parseColor("#111827"))
+
+                    setOnRefreshListener {
+                        webView.reload()
+                    }
+                    addView(webView)
+                }
+
+                val filterManager = UrlFilterManager(config.allowedUrls, config.blockedUrls)
+                webView.webViewClient = KioskWebViewClient(
+                    filterManager = filterManager,
+                    isIgnoreSslErrors = { config.ignoreSslErrors },
+                    onCrashRecover = { post { webView.loadUrl(config.startUrl) } },
+                    onPageLoaded = { _ ->
+                        swipeRefresh.isRefreshing = false
+                    }
+                )
+
+                webView.webChromeClient = KioskWebChromeClient(
+                    onProgressChanged = { progress ->
+                        loadProgress = progress
+                        if (progress >= 95) {
+                            swipeRefresh.isRefreshing = false
+                        }
+                    },
+                    onFullscreenRequested = { },
+                    onFullscreenExit = { }
+                )
+
+                val jsBridge = JavaScriptBridge(context, mainActivity.batteryTracker) { turnOn ->
+                    mainActivity.controlScreen(turnOn)
+                }
+                webView.addJavascriptInterface(jsBridge, "kiosk")
+                webView.addJavascriptInterface(jsBridge, "fully")
+
+                webView.loadUrl(config.startUrl)
+                mainActivity.currentWebView = webView
+
+                swipeRefresh
             },
             modifier = Modifier.fillMaxSize()
         )

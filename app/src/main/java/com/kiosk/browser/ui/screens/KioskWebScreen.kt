@@ -35,7 +35,7 @@ fun KioskWebScreen(
 
     var loadProgress by remember { mutableStateOf(0) }
 
-    // Защита от выгорания OLED
+    // Защита от выгорания OLED дисплея
     val pixelShiftAnim = rememberInfiniteTransition(label = "pixelShift")
     val shiftX by pixelShiftAnim.animateFloat(
         initialValue = -1.5f,
@@ -55,7 +55,7 @@ fun KioskWebScreen(
                 else IntOffset.Zero
             }
     ) {
-        // ── Полноэкранный WebView с поддержкой свайпа сверху вниз (Pull-To-Refresh) ──
+        // ── Полноэкранный WebView с Pull-to-Refresh ──
         AndroidView(
             factory = { context ->
                 val webView = WebView(context).apply {
@@ -76,15 +76,13 @@ fun KioskWebScreen(
                     }
                 }
 
-                // Обертка SwipeRefreshLayout для смахивания сверху вниз
                 val swipeRefresh = SwipeRefreshLayout(context).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                    // Cyber-стилизация индикатора загрузки
-                    setColorSchemeColors(android.graphics.Color.parseColor("#00F0FF")) // NeonCyan
-                    setProgressBackgroundColorSchemeColor(android.graphics.Color.parseColor("#111827")) // CyberSurface
+                    setColorSchemeColors(android.graphics.Color.parseColor("#00F0FF"))
+                    setProgressBackgroundColorSchemeColor(android.graphics.Color.parseColor("#111827"))
 
                     setOnRefreshListener {
                         webView.reload()
@@ -98,7 +96,6 @@ fun KioskWebScreen(
                     isIgnoreSslErrors = { config.ignoreSslErrors },
                     onCrashRecover = { webView.post { webView.loadUrl(config.startUrl) } },
                     onPageLoaded = { _ ->
-                        // Завершаем анимацию свайпа после загрузки
                         swipeRefresh.isRefreshing = false
                     }
                 )
@@ -128,7 +125,7 @@ fun KioskWebScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // ── Тонкий прогресс-бар загрузки страницы вверху ──────────────────────
+        // ── Прогресс загрузки ──
         if (loadProgress in 1..99) {
             LinearProgressIndicator(
                 progress = loadProgress / 100f,
@@ -139,18 +136,18 @@ fun KioskWebScreen(
             )
         }
 
-        // ── Вертикальный HUD статус-бар в левом верхнем углу (отступ ~1 см) ───
+        // ── Горизонтальный мини-бейдж в ПРАВОМ углу экрана с отступом 2 см (~56dp) сверху ──
         KioskStatusBar(
             batteryLevel = batteryLevel,
             isCharging = isCharging,
             isKioskActive = config.isKioskEnabled,
             onLauncherClick = onBackToLauncher,
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(top = 28.dp)
+                .align(Alignment.TopEnd)
+                .padding(top = 56.dp, end = 12.dp)
         )
 
-        // ── Секретная зона в правом верхнем углу для открытия настроек ────────
+        // ── Секретная зона 5 тапов (правый верхний угол) ──
         SecretTapOverlay(
             onSecretTap = { mainActivity.secretGestureDetector.onSecretAreaTapped() },
             modifier = Modifier.align(Alignment.TopEnd)

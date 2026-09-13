@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.kiosk.browser.ui.theme.*
 import com.kiosk.browser.core.update.KioskUpdateManager
 import com.kiosk.browser.core.update.UpdateState
+import com.kiosk.browser.ui.components.FirstRunSetupDialog
+import com.kiosk.browser.ui.screens.PrimaryAppKioskScreen
 import com.kiosk.browser.ui.components.UpdateDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -146,7 +148,13 @@ class MainActivity : ComponentActivity() {
                 openSettingsCallback = { showPinDialog = true }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (isWebMode || config.isSingleAppMode) {
+                    if (config.primaryMode == "APP" && config.primaryAppPackage.isNotEmpty()) {
+                        PrimaryAppKioskScreen(
+                            packageName = config.primaryAppPackage,
+                            mainActivity = this@MainActivity,
+                            onOpenSettings = { showPinDialog = true }
+                        )
+                    } else if (isWebMode || config.isSingleAppMode) {
                         KioskWebScreen(
                             mainActivity = this@MainActivity,
                             onOpenSettingsRequested = { showPinDialog = true },
@@ -197,6 +205,28 @@ class MainActivity : ComponentActivity() {
                         },
                         onDismiss = { updateManager.dismiss() }
                     )
+
+                    // ── Мастер первоначальной настройки при первом запуске ──
+                    if (!config.isFirstLaunchCompleted) {
+                        FirstRunSetupDialog(
+                            initialUrl = config.startUrl,
+                            initialPin = config.pinCode,
+                            onComplete = { mode, url, appPackage, pin ->
+                                configRepository.updateConfig {
+                                    it.copy(
+                                        primaryMode = mode,
+                                        startUrl = url,
+                                        primaryAppPackage = appPackage,
+                                        pinCode = pin,
+                                        isFirstLaunchCompleted = true,
+                                        allowedApps = if (appPackage.isNotEmpty() && !it.allowedApps.contains(appPackage))
+                                            it.allowedApps + appPackage else it.allowedApps
+                                    )
+                                }
+                                applyConfigUpdates()
+                            }
+                        )
+                    }
 
                     var showLauncherPrompt by remember {
                         mutableStateOf(!deviceOwnerManager.isDefaultLauncher())

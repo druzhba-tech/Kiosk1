@@ -56,6 +56,10 @@ fun SettingsScreen(
     var mqttEnabled by remember { mutableStateOf(currentConfig.mqttEnabled) }
     var allowedApps by remember { mutableStateOf(currentConfig.allowedApps) }
     var showAppPicker by remember { mutableStateOf(false) }
+    var showPrimaryAppPicker by remember { mutableStateOf(false) }
+    var primaryMode by remember { mutableStateOf(currentConfig.primaryMode) }
+    var primaryAppPackage by remember { mutableStateOf(currentConfig.primaryAppPackage) }
+    var isFirstLaunchCompleted by remember { mutableStateOf(currentConfig.isFirstLaunchCompleted) }
 
     // Настройки информационной панели
     var hudOrientation by remember { mutableStateOf(currentConfig.hudOrientation) }
@@ -70,6 +74,9 @@ fun SettingsScreen(
         mainActivity.configRepository.updateConfig {
             it.copy(
                 startUrl = startUrl,
+                primaryMode = primaryMode,
+                primaryAppPackage = primaryAppPackage,
+                isFirstLaunchCompleted = isFirstLaunchCompleted,
                 pinCode = pinCode,
                 idleTimeoutSeconds = idleTimeout.toIntOrNull() ?: 120,
                 mqttBroker = mqttBroker,
@@ -265,36 +272,119 @@ fun SettingsScreen(
                 )
             }
 
-            // Стартовый URL
-            SettingsCard(title = "Основной веб-сайт (URL)", icon = Icons.Default.Web) {
-                OutlinedTextField(
-                    value = startUrl,
-                    onValueChange = { newValue: String -> startUrl = newValue },
-                    label = { Text("Стартовый URL") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NeonCyan,
-                        unfocusedBorderColor = CyberBorder,
-                        focusedLabelColor = NeonCyan,
-                        unfocusedLabelColor = TextMuted,
-                        cursorColor = NeonCyan,
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+            // ── ОСНОВНОЙ РЕЖИМ РАБОТЫ (САЙТ ИЛИ ПРИЛОЖЕНИЕ) ──
+            SettingsCard(title = "Основной режим работы (по умолчанию)", icon = Icons.Default.Language) {
+                Text("Что запускать в киоске по умолчанию:", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    AssistChip(
-                        onClick = { startUrl = "https://demo.home-assistant.io" },
-                        label = { Text("Home Assistant") }
+                    FilterChip(
+                        selected = primaryMode == "WEB",
+                        onClick = { primaryMode = "WEB" },
+                        label = { Text("Веб-сайт (URL)") },
+                        modifier = Modifier.weight(1f)
                     )
-                    AssistChip(
-                        onClick = { startUrl = "http://192.168.1.100:8123" },
-                        label = { Text("Локальный HA") }
+                    FilterChip(
+                        selected = primaryMode == "APP",
+                        onClick = { primaryMode = "APP" },
+                        label = { Text("Android-приложение") },
+                        modifier = Modifier.weight(1f)
                     )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (primaryMode == "WEB") {
+                    OutlinedTextField(
+                        value = startUrl,
+                        onValueChange = { newValue: String -> startUrl = newValue },
+                        label = { Text("Стартовый веб-сайт (URL)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = CyberBorder,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextMuted,
+                            cursorColor = NeonCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AssistChip(
+                            onClick = { startUrl = "https://demo.home-assistant.io" },
+                            label = { Text("Home Assistant") }
+                        )
+                        AssistChip(
+                            onClick = { startUrl = "http://192.168.1.100:8123" },
+                            label = { Text("Локальный HA") }
+                        )
+                    }
+                } else {
+                    // Режим приложения
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (primaryAppPackage.isNotEmpty()) {
+                            val pm = context.packageManager
+                            val appLabel = remember(primaryAppPackage) {
+                                runCatching {
+                                    val info = pm.getApplicationInfo(primaryAppPackage, 0)
+                                    pm.getApplicationLabel(info).toString()
+                                }.getOrDefault(primaryAppPackage)
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0D2030))
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = NeonCyan)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(appLabel, color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(primaryAppPackage, color = TextMuted, fontSize = 10.sp)
+                                }
+                                TextButton(onClick = { showPrimaryAppPicker = true }) {
+                                    Text("Сменить", color = NeonCyan)
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = { showPrimaryAppPicker = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = CyberSurface),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            ) {
+                                Icon(Icons.Default.Apps, contentDescription = null, tint = NeonCyan)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Выбрать приложение по умолчанию", color = TextWhite)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = {
+                        isFirstLaunchCompleted = false
+                        Toast.makeText(context, "Мастер настройки запустится при следующем входе", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Сбросить и показать мастер настройки при старте", fontSize = 11.sp)
                 }
             }
 

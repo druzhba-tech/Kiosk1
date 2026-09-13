@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser
+package com.kiosk.browser
 
 import android.content.Intent
 import android.media.RingtoneManager
@@ -186,6 +186,18 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // ── Диалог автообновления (OTA) ──
+                    val updateState by updateManager.updateState.collectAsState()
+                    UpdateDialog(
+                        state = updateState,
+                        onInstallClick = { downloadUrl ->
+                            lifecycleScope.launch {
+                                updateManager.downloadAndInstall(downloadUrl)
+                            }
+                        },
+                        onDismiss = { updateManager.dismiss() }
+                    )
+
                     var showLauncherPrompt by remember {
                         mutableStateOf(!deviceOwnerManager.isDefaultLauncher())
                     }
@@ -245,12 +257,7 @@ class MainActivity : ComponentActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
-    fun applyConfigUpdates()
-        // Автопроверка обновлений по воздуху (OTA)
-        lifecycleScope.launch {
-            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
-            updateManager.checkForUpdates(versionName)
-        } {
+    fun applyConfigUpdates() {
         val config = configRepository.getConfig()
 
         powerHelper.setKeepScreenOn(this, config.keepScreenOn)

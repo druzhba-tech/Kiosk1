@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.core.power
+package com.kiosk.browser.core.power
 
 import android.app.Activity
 import android.content.Context
@@ -57,6 +57,17 @@ class PowerManagerHelper(private val context: Context) {
      * Снижение яркости до абсолютного минимума в режиме виртуального сна,
      * что экономит до 85% энергии подсветки экрана
      */
+        /**
+     * Ручная установка рабочей яркости дисплея (от 0.05 до 1.0)
+     */
+    fun setScreenBrightness(activity: Activity, brightness: Float) {
+        activity.runOnUiThread {
+            val layoutParams = activity.window.attributes
+            layoutParams.screenBrightness = brightness.coerceIn(0.05f, 1.0f)
+            activity.window.attributes = layoutParams
+        }
+    }
+
     fun setVirtualSleepBrightness(activity: Activity, sleep: Boolean) {
         activity.runOnUiThread {
             val layoutParams = activity.window.attributes

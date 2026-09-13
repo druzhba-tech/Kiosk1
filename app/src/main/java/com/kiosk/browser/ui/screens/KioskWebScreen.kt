@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.ui.screens
+package com.kiosk.browser.ui.screens
 
 import android.view.ViewGroup
 import android.webkit.WebSettings
@@ -125,7 +125,7 @@ fun KioskWebScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // ── Прогресс загрузки ──
+        // ── Тонкий индикатор загрузки страницы ──
         if (loadProgress in 1..99) {
             LinearProgressIndicator(
                 progress = loadProgress / 100f,
@@ -136,18 +136,41 @@ fun KioskWebScreen(
             )
         }
 
-        // ── Горизонтальный мини-бейдж в ПРАВОМ углу экрана с отступом 2 см (~56dp) сверху ──
+        // ── Вычисление позиции и отступа панели по настройкам ──
+        val hudAlignment = when (config.hudPosition) {
+            "TOP_LEFT" -> Alignment.TopStart
+            "BOTTOM_RIGHT" -> Alignment.BottomEnd
+            "BOTTOM_LEFT" -> Alignment.BottomStart
+            else -> Alignment.TopEnd
+        }
+
+        // 1 см ≈ 28 dp, отступ 2 см = 56 dp
+        val topMarginDp = (config.hudTopMarginCm * 28f).coerceAtLeast(0f).dp
+
+        val hudModifier = Modifier
+            .align(hudAlignment)
+            .padding(
+                top = if (hudAlignment == Alignment.TopEnd || hudAlignment == Alignment.TopStart) topMarginDp else 0.dp,
+                bottom = if (hudAlignment == Alignment.BottomEnd || hudAlignment == Alignment.BottomStart) 20.dp else 0.dp,
+                end = if (hudAlignment == Alignment.TopEnd || hudAlignment == Alignment.BottomEnd) 12.dp else 0.dp,
+                start = if (hudAlignment == Alignment.TopStart || hudAlignment == Alignment.BottomStart) 12.dp else 0.dp
+            )
+
+        // ── Информационная панель (вертикальная/горизонтальная, с яркостью и Wi-Fi) ──
         KioskStatusBar(
             batteryLevel = batteryLevel,
             isCharging = isCharging,
             isKioskActive = config.isKioskEnabled,
+            isVertical = config.hudOrientation.equals("VERTICAL", ignoreCase = true),
+            showBrightness = config.hudShowBrightness,
+            showWifi = config.hudShowWifi,
+            showBattery = config.hudShowBattery,
+            showKioskStatus = config.hudShowKioskStatus,
             onLauncherClick = onBackToLauncher,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 56.dp, end = 12.dp)
+            modifier = hudModifier
         )
 
-        // ── Секретная зона 5 тапов (правый верхний угол) ──
+        // ── Секретная зона 5 тапов для открытия настроек (правый верхний угол) ──
         SecretTapOverlay(
             onSecretTap = { mainActivity.secretGestureDetector.onSecretAreaTapped() },
             modifier = Modifier.align(Alignment.TopEnd)

@@ -4,19 +4,28 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class KioskConfig(
-    // Основные настройки веб-киоска
+    // Стартовый веб-сайт
     val startUrl: String = "https://demo.home-assistant.io",
     val isKioskEnabled: Boolean = true,
     val isSingleAppMode: Boolean = true,
     val pinCode: String = "1234",
     val emergencyAdbKey: String = "SECRET_KIOSK_KEY_777",
 
-    // Питание, экран и заставка
+    // Экран, сон и заставка
     val keepScreenOn: Boolean = true,
     val idleTimeoutSeconds: Int = 120,
     val screensaverEnabled: Boolean = true,
     val oledBurnInProtection: Boolean = true,
     val virtualSleepEnabled: Boolean = true,
+
+    // Настройки информационной панели (HUD)
+    val hudPosition: String = "TOP_RIGHT", // "TOP_RIGHT", "TOP_LEFT", "BOTTOM_RIGHT", "BOTTOM_LEFT"
+    val hudTopMarginCm: Float = 2.0f,
+    val hudOrientation: String = "VERTICAL", // "VERTICAL", "HORIZONTAL"
+    val hudShowBrightness: Boolean = true,
+    val hudShowWifi: Boolean = true,
+    val hudShowBattery: Boolean = true,
+    val hudShowKioskStatus: Boolean = true,
 
     // Блокировки и безопасность
     val blockHardwareKeys: Boolean = true,
@@ -24,18 +33,18 @@ data class KioskConfig(
     val blockUsbFileTransfer: Boolean = false,
     val blockSafeMode: Boolean = false,
 
-    // Веб-движок и надежность
+    // Браузер и сеть
     val ignoreSslErrors: Boolean = true,
     val clearDataOnIdle: Boolean = false,
     val autoReloadOnNetworkRecover: Boolean = true,
-    val dailyRebootTimeHour: Int = 4, // 04:00 утра плановый рестарт WebView
+    val dailyRebootTimeHour: Int = 4,
     val allowedUrls: List<String> = listOf("http://*", "https://*"),
     val blockedUrls: List<String> = emptyList(),
 
-    // Приложения лаунчера
+    // Разрешенные приложения
     val allowedApps: List<String> = emptyList(),
 
-    // Сенсоры и антивор
+    // Охрана и датчики
     val antiTheftAlarmEnabled: Boolean = false,
     val motionSensitivity: Float = 2.5f,
     val lightSensorAdaptiveBrightness: Boolean = false,

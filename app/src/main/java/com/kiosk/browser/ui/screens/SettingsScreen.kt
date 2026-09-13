@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.ui.screens
+package com.kiosk.browser.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -57,6 +57,15 @@ fun SettingsScreen(
     var allowedApps by remember { mutableStateOf(currentConfig.allowedApps) }
     var showAppPicker by remember { mutableStateOf(false) }
 
+    // Настройки информационной панели
+    var hudOrientation by remember { mutableStateOf(currentConfig.hudOrientation) }
+    var hudPosition by remember { mutableStateOf(currentConfig.hudPosition) }
+    var hudMarginCm by remember { mutableFloatStateOf(currentConfig.hudTopMarginCm) }
+    var hudShowBrightness by remember { mutableStateOf(currentConfig.hudShowBrightness) }
+    var hudShowWifi by remember { mutableStateOf(currentConfig.hudShowWifi) }
+    var hudShowBattery by remember { mutableStateOf(currentConfig.hudShowBattery) }
+    var hudShowKioskStatus by remember { mutableStateOf(currentConfig.hudShowKioskStatus) }
+
     fun saveAll() {
         mainActivity.configRepository.updateConfig {
             it.copy(
@@ -74,7 +83,14 @@ fun SettingsScreen(
                 blockHardwareKeys = blockKeys,
                 antiTheftAlarmEnabled = antiTheft,
                 mqttEnabled = mqttEnabled,
-                allowedApps = allowedApps
+                allowedApps = allowedApps,
+                hudOrientation = hudOrientation,
+                hudPosition = hudPosition,
+                hudTopMarginCm = hudMarginCm,
+                hudShowBrightness = hudShowBrightness,
+                hudShowWifi = hudShowWifi,
+                hudShowBattery = hudShowBattery,
+                hudShowKioskStatus = hudShowKioskStatus
             )
         }
         mainActivity.applyConfigUpdates()
@@ -120,6 +136,7 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Главный статус киоска
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -163,6 +180,92 @@ fun SettingsScreen(
                 }
             }
 
+            // ── НОВАЯ ВКЛАДКА: НАСТРОЙКИ ИНФОРМАЦИОННОЙ ПАНЕЛИ (HUD) ──
+            SettingsCard(title = "Информационная панель (HUD)", icon = Icons.Default.Dashboard) {
+                // Ориентация панели
+                Text("Ориентация панели:", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = hudOrientation == "VERTICAL",
+                        onClick = { hudOrientation = "VERTICAL" },
+                        label = { Text("Вертикальная") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = hudOrientation == "HORIZONTAL",
+                        onClick = { hudOrientation = "HORIZONTAL" },
+                        label = { Text("Горизонтальная") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Расположение на экране
+                Text("Расположение панели:", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = hudPosition == "TOP_RIGHT",
+                        onClick = { hudPosition = "TOP_RIGHT" },
+                        label = { Text("Верх-Право") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = hudPosition == "TOP_LEFT",
+                        onClick = { hudPosition = "TOP_LEFT" },
+                        label = { Text("Верх-Лево") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Отступ от верхнего края
+                Text("Отступ от верхнего края: ${String.format("%.1f", hudMarginCm)} см", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Slider(
+                    value = hudMarginCm,
+                    onValueChange = { hudMarginCm = it },
+                    valueRange = 0.5f..4.0f,
+                    steps = 6,
+                    colors = SliderDefaults.colors(thumbColor = NeonCyan, activeTrackColor = NeonCyan)
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Переключатели элементов
+                SettingsToggle(
+                    title = "Кнопка регулировки яркости",
+                    subtitle = "Быстрый слайдер яркости при нажатии",
+                    checked = hudShowBrightness,
+                    onCheckedChange = { hudShowBrightness = it }
+                )
+                SettingsToggle(
+                    title = "Кнопка переключения Wi-Fi",
+                    subtitle = "Статус сети и открытие настроек Wi-Fi",
+                    checked = hudShowWifi,
+                    onCheckedChange = { hudShowWifi = it }
+                )
+                SettingsToggle(
+                    title = "Индикатор батареи и проценты",
+                    subtitle = "Иконка батареи и заряд в %",
+                    checked = hudShowBattery,
+                    onCheckedChange = { hudShowBattery = it }
+                )
+                SettingsToggle(
+                    title = "Иконка статуса KIOSK",
+                    subtitle = "Зеленый замочек активного режима",
+                    checked = hudShowKioskStatus,
+                    onCheckedChange = { hudShowKioskStatus = it }
+                )
+            }
+
+            // Стартовый URL
             SettingsCard(title = "Основной веб-сайт (URL)", icon = Icons.Default.Web) {
                 OutlinedTextField(
                     value = startUrl,
@@ -195,6 +298,7 @@ fun SettingsScreen(
                 }
             }
 
+            // Режим одного приложения
             SettingsCard(title = "Режим приложений", icon = Icons.Default.Apps) {
                 SettingsToggle(
                     title = "Режим одного приложения",
@@ -216,6 +320,7 @@ fun SettingsScreen(
                 }
             }
 
+            // Экран и заставка
             SettingsCard(title = "Экран и энергосбережение", icon = Icons.Default.WbSunny) {
                 SettingsToggle(
                     title = "Держать экран включенным",
@@ -226,7 +331,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 SettingsToggle(
                     title = "Заставка (Скринсейвер)",
-                    subtitle = "Cyber HUD часы при отсутствии касаний",
+                    subtitle = "Яркие Cyber HUD часы при отсутствии касаний",
                     checked = screensaverEnabled,
                     onCheckedChange = { screensaverEnabled = it }
                 )
@@ -257,6 +362,7 @@ fun SettingsScreen(
                 )
             }
 
+            // Веб и сеть
             SettingsCard(title = "Веб и сеть", icon = Icons.Default.Wifi) {
                 SettingsToggle(
                     title = "Игнорировать ошибки SSL",
@@ -266,6 +372,7 @@ fun SettingsScreen(
                 )
             }
 
+            // Безопасность и PIN
             SettingsCard(title = "Безопасность и PIN-код", icon = Icons.Default.Lock) {
                 OutlinedTextField(
                     value = pinCode,
@@ -289,67 +396,9 @@ fun SettingsScreen(
                     checked = blockKeys,
                     onCheckedChange = { blockKeys = it }
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Статус Device Owner: ${if (mainActivity.deviceOwnerManager.isDeviceOwner) "АКТИВЕН" else "НЕ АКТИВЕН"}",
-                    color = if (mainActivity.deviceOwnerManager.isDeviceOwner) NeonGreen else NeonOrange,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
             }
 
-            SettingsCard(title = "Охрана и датчики", icon = Icons.Default.Sensors) {
-                SettingsToggle(
-                    title = "Антикража (Детектор перемещения)",
-                    subtitle = "Срабатывает сирена при попытке снять планшет со стены",
-                    checked = antiTheft,
-                    onCheckedChange = { antiTheft = it }
-                )
-            }
-
-            SettingsCard(title = "Интеграция с MQTT & Home Assistant", icon = Icons.Default.Sensors) {
-                SettingsToggle(
-                    title = "Включить MQTT клиент",
-                    subtitle = "Передача телеметрии и удаленное управление планшетом",
-                    checked = mqttEnabled,
-                    onCheckedChange = { mqttEnabled = it }
-                )
-                if (mqttEnabled) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = mqttBroker,
-                        onValueChange = { newValue: String -> mqttBroker = newValue },
-                        label = { Text("IP адрес MQTT брокера") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = CyberBorder,
-                            focusedLabelColor = NeonCyan,
-                            unfocusedLabelColor = TextMuted,
-                            cursorColor = NeonCyan,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = mqttPort,
-                        onValueChange = { newValue: String -> mqttPort = newValue },
-                        label = { Text("Порт MQTT (по умолчанию 1883)") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = CyberBorder,
-                            focusedLabelColor = NeonCyan,
-                            unfocusedLabelColor = TextMuted,
-                            cursorColor = NeonCyan,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
+            // Резервная копия
             SettingsCard(title = "Резервная копия конфигурации", icon = Icons.Default.Save) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

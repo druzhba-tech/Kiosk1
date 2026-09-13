@@ -23,6 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiosk.browser.ui.theme.*
+import com.kiosk.browser.core.update.KioskUpdateManager
+import com.kiosk.browser.core.update.UpdateState
+import com.kiosk.browser.ui.components.UpdateDialog
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -50,6 +55,7 @@ class MainActivity : ComponentActivity() {
     val deviceOwnerManager by lazy { DeviceOwnerManager(this) }
     val powerHelper by lazy { PowerManagerHelper(this) }
     val batteryTracker by lazy { BatteryTracker(this) }
+    val updateManager by lazy { KioskUpdateManager(this) }
 
     lateinit var motionTracker: MotionSensorTracker
     lateinit var idleWatchdog: IdleWatchdog
@@ -104,6 +110,11 @@ class MainActivity : ComponentActivity() {
         }
 
         applyConfigUpdates()
+        // Автопроверка обновлений по воздуху (OTA)
+        lifecycleScope.launch {
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+            updateManager.checkForUpdates(versionName)
+        }
 
         val serviceIntent = Intent(this, KioskForegroundService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -234,7 +245,12 @@ class MainActivity : ComponentActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
-    fun applyConfigUpdates() {
+    fun applyConfigUpdates()
+        // Автопроверка обновлений по воздуху (OTA)
+        lifecycleScope.launch {
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+            updateManager.checkForUpdates(versionName)
+        } {
         val config = configRepository.getConfig()
 
         powerHelper.setKeepScreenOn(this, config.keepScreenOn)
@@ -264,6 +280,11 @@ class MainActivity : ComponentActivity() {
     fun startKioskMode() {
         configRepository.updateConfig { it.copy(isKioskEnabled = true) }
         applyConfigUpdates()
+        // Автопроверка обновлений по воздуху (OTA)
+        lifecycleScope.launch {
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+            updateManager.checkForUpdates(versionName)
+        }
     }
 
     fun exitKioskMode() {

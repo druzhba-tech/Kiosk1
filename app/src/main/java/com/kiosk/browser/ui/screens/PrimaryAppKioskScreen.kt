@@ -78,29 +78,28 @@ fun PrimaryAppKioskScreen(
         launchPrimaryApp()
     }
 
-    val hudAlignment = when (config.hudPosition) {
-        "TOP_LEFT" -> Alignment.TopStart
-        "BOTTOM_RIGHT" -> Alignment.BottomEnd
-        "BOTTOM_LEFT" -> Alignment.BottomStart
-        else -> Alignment.TopEnd
-    }
-
-    val hudModifier = Modifier
-        .align(hudAlignment)
-        .padding(
-            top = if (hudAlignment == Alignment.TopEnd || hudAlignment == Alignment.TopStart) {
-                (config.hudTopMarginCm * 28).dp
-            } else 0.dp,
-            bottom = if (hudAlignment == Alignment.BottomEnd || hudAlignment == Alignment.BottomStart) 16.dp else 0.dp,
-            end = if (hudAlignment == Alignment.TopEnd || hudAlignment == Alignment.BottomEnd) 12.dp else 0.dp,
-            start = if (hudAlignment == Alignment.TopStart || hudAlignment == Alignment.BottomStart) 12.dp else 0.dp
-        )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(CyberBlack)
     ) {
+        val hudAlignment = when (config.hudPosition) {
+            "TOP_LEFT" -> Alignment.TopStart
+            "BOTTOM_RIGHT" -> Alignment.BottomEnd
+            "BOTTOM_LEFT" -> Alignment.BottomStart
+            else -> Alignment.TopEnd
+        }
+
+        val hudModifier = Modifier
+            .align(hudAlignment)
+            .padding(
+                top = if (hudAlignment == Alignment.TopEnd || hudAlignment == Alignment.TopStart) {
+                    (config.hudTopMarginCm * 28).dp
+                } else 0.dp,
+                bottom = if (hudAlignment == Alignment.BottomEnd || hudAlignment == Alignment.BottomStart) 16.dp else 0.dp,
+                end = if (hudAlignment == Alignment.TopEnd || hudAlignment == Alignment.BottomEnd) 12.dp else 0.dp,
+                start = if (hudAlignment == Alignment.TopStart || hudAlignment == Alignment.BottomStart) 12.dp else 0.dp
+            )
         // Центр: Карточка приложения и запуск
         Column(
             modifier = Modifier

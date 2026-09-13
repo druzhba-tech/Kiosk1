@@ -1,4 +1,4 @@
-package com.kiosk.browser.ui.screens
+﻿package com.kiosk.browser.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -11,6 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,16 +38,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val currentConfig by mainActivity.configRepository.configFlow.collectAsState()
-
-    val tfColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = NeonCyan,
-        unfocusedBorderColor = CyberBorder,
-        focusedLabelColor = NeonCyan,
-        unfocusedLabelColor = TextMuted,
-        cursorColor = NeonCyan,
-        focusedTextColor = TextWhite,
-        unfocusedTextColor = TextWhite
-    )
 
     var startUrl by remember { mutableStateOf(currentConfig.startUrl) }
     var pinCode by remember { mutableStateOf(currentConfig.pinCode) }
@@ -174,9 +166,17 @@ fun SettingsScreen(
             SettingsCard(title = "Основной веб-сайт (URL)", icon = Icons.Default.Web) {
                 OutlinedTextField(
                     value = startUrl,
-                    onValueChange = { startUrl = it },
+                    onValueChange = { newValue: String -> startUrl = newValue },
                     label = { Text("Стартовый URL") },
-                    colors = tfColors,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = CyberBorder,
+                        focusedLabelColor = NeonCyan,
+                        unfocusedLabelColor = TextMuted,
+                        cursorColor = NeonCyan,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -234,9 +234,17 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = idleTimeout,
-                        onValueChange = { idleTimeout = it },
+                        onValueChange = { newValue: String -> idleTimeout = newValue },
                         label = { Text("Таймаут перехода в заставку (сек)") },
-                        colors = tfColors,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = CyberBorder,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextMuted,
+                            cursorColor = NeonCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -261,9 +269,17 @@ fun SettingsScreen(
             SettingsCard(title = "Безопасность и PIN-код", icon = Icons.Default.Lock) {
                 OutlinedTextField(
                     value = pinCode,
-                    onValueChange = { pinCode = it },
+                    onValueChange = { newValue: String -> pinCode = newValue },
                     label = { Text("Мастер-PIN код (по умолчанию: 1234)") },
-                    colors = tfColors,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = CyberBorder,
+                        focusedLabelColor = NeonCyan,
+                        unfocusedLabelColor = TextMuted,
+                        cursorColor = NeonCyan,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -302,17 +318,33 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = mqttBroker,
-                        onValueChange = { mqttBroker = it },
+                        onValueChange = { newValue: String -> mqttBroker = newValue },
                         label = { Text("IP адрес MQTT брокера") },
-                        colors = tfColors,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = CyberBorder,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextMuted,
+                            cursorColor = NeonCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = mqttPort,
-                        onValueChange = { mqttPort = it },
+                        onValueChange = { newValue: String -> mqttPort = newValue },
                         label = { Text("Порт MQTT (по умолчанию 1883)") },
-                        colors = tfColors,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = CyberBorder,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextMuted,
+                            cursorColor = NeonCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -344,7 +376,7 @@ fun SettingsScreen(
     if (showAppPicker) {
         AppPickerDialog(
             selectedPackages = allowedApps,
-            onConfirm = { selected ->
+            onConfirm = { selected: List<String> ->
                 allowedApps = selected
                 showAppPicker = false
             },

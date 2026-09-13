@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -73,6 +73,9 @@ dependencies {
 
     // WebView
     implementation("androidx.webkit:webkit:1.10.0")
+
+    // Swipe to Refresh
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
     // MQTT Client for Home Assistant & Telemetry
     implementation("com.hivemq:hivemq-mqtt-client:1.3.3")

@@ -205,12 +205,7 @@ fun KioskStatusBar(
         ) {
             when {
                 isWifiConnected && wifiLevel >= 0 -> {
-                    val wifiIcon = when {
-                        wifiLevel <= 1 -> Icons.Default.SignalWifi1Bar
-                        wifiLevel == 2 -> Icons.Default.SignalWifi2Bar
-                        wifiLevel == 3 -> Icons.Default.SignalWifi3Bar
-                        else           -> Icons.Default.Wifi
-                    }
+                    val wifiIcon = Icons.Default.Wifi
                     Icon(wifiIcon, contentDescription = "WiFi", tint = NeonCyan, modifier = Modifier.size(13.dp))
                     Text(
                         text = "Wi-Fi  " + "▮".repeat(wifiLevel + 1) + "▯".repeat(4 - wifiLevel),

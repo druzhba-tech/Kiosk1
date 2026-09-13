@@ -1,4 +1,4 @@
-package com.kiosk.browser.ui.components
+﻿package com.kiosk.browser.ui.components
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,11 +7,13 @@ import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
-import android.telephony.TelephonyManager
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
@@ -19,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,13 +35,10 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-
 /**
- * Верхняя строка статуса в стиле Cyber-HUD.
- * Слева — статус киоска и кнопка меню, по центру — часы, справа — сигнал и батарея.
+ * Вертикальный HUD-виджет в левом верхнем углу экрана (overlay поверх WebView).
+ * Отображает: кнопку лаунчера, время, уровень WiFi/мобильной сети, заряд батареи, статус KIOSK.
+ * Отступ от верхнего края задаётся снаружи через modifier (padding top ~28dp ≈ 1 см).
  */
 @Composable
 fun KioskStatusBar(
@@ -50,7 +50,7 @@ fun KioskStatusBar(
 ) {
     val context = LocalContext.current
 
-    // ── Часы ──────────────────────────────────────────────────────────────────
+    // ── Время ──────────────────────────────────────────────────────────────
     var currentTime by remember { mutableStateOf(getCurrentTime()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -59,22 +59,22 @@ fun KioskStatusBar(
         }
     }
 
-    // ── WiFi / мобильный сигнал ───────────────────────────────────────────────
-    var wifiLevel by remember { mutableStateOf(-1) }
-    var mobileSignal by remember { mutableStateOf(-1) }
+    // ── Сеть: WiFi / Мобильный ─────────────────────────────────────────────
     var isWifiConnected by remember { mutableStateOf(false) }
     var isMobileConnected by remember { mutableStateOf(false) }
+    var wifiLevel by remember { mutableIntStateOf(-1) }
+    var mobileSignal by remember { mutableIntStateOf(-1) }
 
     DisposableEffect(context) {
         fun updateSignal() {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val network = cm.activeNetwork
-            val caps = cm.getNetworkCapabilities(network)
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork)
             isWifiConnected = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
             isMobileConnected = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
             if (isWifiConnected) {
-                val wifiMgr = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-                val rssi = wifiMgr.connectionInfo.rssi
+                @Suppress("DEPRECATION")
+                val rssi = (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
+                    .connectionInfo.rssi
                 wifiLevel = WifiManager.calculateSignalLevel(rssi, 5)
                 mobileSignal = -1
             } else if (isMobileConnected) {
@@ -99,9 +99,9 @@ fun KioskStatusBar(
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    // ── Анимация зарядки ──────────────────────────────────────────────────────
+    // ── Анимация зарядки ───────────────────────────────────────────────────
     val chargingAlpha by rememberInfiniteTransition(label = "charging").animateFloat(
-        initialValue = 1f, targetValue = 0.35f,
+        initialValue = 1f, targetValue = 0.3f,
         animationSpec = infiniteRepeatable(
             animation = tween(700, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -109,59 +109,58 @@ fun KioskStatusBar(
         label = "chargingAlpha"
     )
 
-    // ── Layout ────────────────────────────────────────────────────────────────
-    Row(
+    // ── Мигающая точка-статус ──────────────────────────────────────────────
+    val dotAlpha by rememberInfiniteTransition(label = "dot").animateFloat(
+        initialValue = 1f, targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dotAlpha"
+    )
+
+    // ── Сам виджет: вертикальная колонка ──────────────────────────────────
+    Column(
         modifier = modifier
-            .fillMaxWidth()
-            .height(28.dp)
+            .wrapContentSize()
+            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 0.dp))
             .background(
-                Brush.horizontalGradient(
-                    listOf(Color(0xF5060C18), Color(0xEE090F1E), Color(0xF5060C18))
+                Brush.verticalGradient(
+                    listOf(Color(0xEE060C18), Color(0xDD090F1E), Color(0xCC060C18))
                 )
             )
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .border(
+                width = 0.5.dp,
+                brush = Brush.verticalGradient(
+                    listOf(NeonCyan.copy(alpha = 0.5f), NeonCyan.copy(alpha = 0.1f), Color.Transparent)
+                ),
+                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 0.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // ── Левая часть: Меню приложений и статус KIOSK ──────────────────────
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            if (onLauncherClick != null) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onLauncherClick)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Apps,
-                        contentDescription = "Приложения",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = "МЕНЮ",
-                        color = NeonCyan,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
 
-            if (isKioskActive) {
+        // ── Кнопка лаунчера ───────────────────────────────────────────────
+        if (onLauncherClick != null) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onLauncherClick)
+                    .background(NeonCyan.copy(alpha = 0.12f))
+                    .padding(horizontal = 7.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Icon(
-                    Icons.Default.Lock, contentDescription = "Kiosk Active",
-                    tint = NeonGreen, modifier = Modifier.size(11.dp)
+                    Icons.Default.Apps,
+                    contentDescription = "Лаунчер",
+                    tint = NeonCyan,
+                    modifier = Modifier.size(14.dp)
                 )
                 Text(
-                    text = "KIOSK",
-                    color = NeonGreen,
+                    text = "APPS",
+                    color = NeonCyan,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.5.sp,
@@ -170,44 +169,99 @@ fun KioskStatusBar(
             }
         }
 
-        // ── Центр: Часы ───────────────────────────────────────────────────────
-        Text(
-            text = currentTime,
-            color = TextWhite,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp,
-            fontFamily = FontFamily.Monospace
+        // Разделитель
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(CyberBorder)
         )
 
-        // ── Правая часть: Сигнал + Батарея ────────────────────────────────────
+        // ── Время ──────────────────────────────────────────────────────────
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(
+                Icons.Default.AccessTime,
+                contentDescription = "Время",
+                tint = TextMuted,
+                modifier = Modifier.size(11.dp)
+            )
+            Text(
+                text = currentTime,
+                color = TextWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+
+        // ── Сеть / WiFi (уровень сигнала) ─────────────────────────────────
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             when {
-                isWifiConnected && wifiLevel >= 0 -> WifiSignalIcon(wifiLevel)
-                isMobileConnected && mobileSignal >= 0 -> MobileSignalIcon(mobileSignal)
-                else -> Icon(
-                    Icons.Default.WifiOff, contentDescription = "No network",
-                    tint = TextMuted, modifier = Modifier.size(13.dp)
-                )
+                isWifiConnected && wifiLevel >= 0 -> {
+                    val wifiIcon = when {
+                        wifiLevel <= 1 -> Icons.Default.SignalWifi1Bar
+                        wifiLevel == 2 -> Icons.Default.SignalWifi2Bar
+                        wifiLevel == 3 -> Icons.Default.SignalWifi3Bar
+                        else           -> Icons.Default.Wifi
+                    }
+                    Icon(wifiIcon, contentDescription = "WiFi", tint = NeonCyan, modifier = Modifier.size(13.dp))
+                    Text(
+                        text = "Wi-Fi  " + "▮".repeat(wifiLevel + 1) + "▯".repeat(4 - wifiLevel),
+                        color = NeonCyan,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                isMobileConnected && mobileSignal >= 0 -> {
+                    Icon(Icons.Default.SignalCellularAlt, contentDescription = "LTE", tint = NeonGreen, modifier = Modifier.size(13.dp))
+                    Text(
+                        text = "LTE  " + "▮".repeat(mobileSignal + 1) + "▯".repeat(4 - mobileSignal),
+                        color = NeonGreen,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                else -> {
+                    Icon(Icons.Default.WifiOff, contentDescription = "Нет сети", tint = NeonRed, modifier = Modifier.size(13.dp))
+                    Text(
+                        text = "NO NET",
+                        color = NeonRed,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.5.sp
+                    )
+                }
             }
+        }
 
-            val batteryIcon: ImageVector = when {
-                isCharging        -> Icons.Default.BatteryChargingFull
-                batteryLevel < 15 -> Icons.Default.BatteryAlert
-                else              -> Icons.Default.BatteryFull
-            }
-            val batteryColor = when {
-                batteryLevel < 15 -> NeonRed
-                batteryLevel < 30 -> NeonOrange
-                else              -> NeonCyan
-            }
-
+        // ── Батарея ────────────────────────────────────────────────────────
+        val batteryIcon: ImageVector = when {
+            isCharging        -> Icons.Default.BatteryChargingFull
+            batteryLevel < 15 -> Icons.Default.BatteryAlert
+            else              -> Icons.Default.BatteryFull
+        }
+        val batteryColor = when {
+            batteryLevel < 15 -> NeonRed
+            batteryLevel < 30 -> NeonOrange
+            else              -> NeonCyan
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
             Icon(
-                batteryIcon, contentDescription = "Battery",
+                batteryIcon,
+                contentDescription = "Батарея",
                 tint = if (isCharging) batteryColor.copy(alpha = chargingAlpha) else batteryColor,
                 modifier = Modifier.size(13.dp)
             )
@@ -219,27 +273,35 @@ fun KioskStatusBar(
                 fontFamily = FontFamily.Monospace
             )
         }
+
+        // ── Статус KIOSK ───────────────────────────────────────────────────
+        if (isKioskActive) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .background(NeonGreen.copy(alpha = dotAlpha), shape = CircleShape)
+                )
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = "Kiosk Active",
+                    tint = NeonGreen,
+                    modifier = Modifier.size(11.dp)
+                )
+                Text(
+                    text = "KIOSK",
+                    color = NeonGreen,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
     }
-}
-
-@Composable
-private fun WifiSignalIcon(level: Int) {
-    Icon(
-        Icons.Default.Wifi,
-        contentDescription = "WiFi $level",
-        tint = NeonCyan,
-        modifier = Modifier.size(13.dp)
-    )
-}
-
-@Composable
-private fun MobileSignalIcon(level: Int) {
-    Icon(
-        Icons.Default.SignalCellularAlt,
-        contentDescription = "Mobile $level",
-        tint = NeonCyan,
-        modifier = Modifier.size(13.dp)
-    )
 }
 
 private fun getCurrentTime(): String =

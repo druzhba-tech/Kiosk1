@@ -324,6 +324,33 @@ fun SettingsScreen(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
+
+                val isDefaultHome = remember { mainActivity.deviceOwnerManager.isDefaultLauncher() }
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        mainActivity.deviceOwnerManager.requestDefaultLauncher(mainActivity)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDefaultHome) Color(0xFF133826) else NeonCyan
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Home,
+                        contentDescription = null,
+                        tint = if (isDefaultHome) NeonGreen else CyberBlack
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (isDefaultHome) "✓ ГЛАВНЫЙ ЭКРАН ПО УМОЛЧАНИЮ" else "СДЕЛАТЬ ГЛАВНЫМ ЭКРАНОМ (В 1 КЛИК)",
+                        color = if (isDefaultHome) NeonGreen else CyberBlack,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             // Раздел: Экран и питание

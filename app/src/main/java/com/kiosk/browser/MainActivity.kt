@@ -1,4 +1,4 @@
-package com.kiosk.browser
+﻿package com.kiosk.browser
 
 import android.content.Intent
 import android.media.RingtoneManager
@@ -7,14 +7,22 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.kiosk.browser.ui.theme.*
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -59,22 +67,20 @@ class MainActivity : ComponentActivity() {
 
         enableImmersiveMode()
 
-        // Инициализация трекера батареи
         batteryTracker.start()
 
-        // Инициализация антивора
         motionTracker = MotionSensorTracker(this) {
             triggerAntiTheftAlarm()
         }
         motionTracker.start()
 
-        // Инициализация таймера бездействия
         idleWatchdog = IdleWatchdog(
             onIdleTimeout = {
                 val config = configRepository.getConfig()
                 if (config.screensaverEnabled) {
                     _isScreensaverActive.value = true
                     if (config.virtualSleepEnabled) {
+                        // Энергосбережение: темный экран, но веб-сокет и аудио заказов слушают 24/7
                         powerHelper.setVirtualSleepBrightness(this, true)
                     }
                 }
@@ -87,14 +93,11 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // Секретный жест (5 тапов в правом верхнем углу)
         secretGestureDetector = SecretGestureDetector {
             triggerOpenSettings()
         }
 
-        // NFC Менеджер
         nfcManager = KioskNfcManager(this) { tagId ->
-            // При считывании NFC передаем ID в WebView
             runOnUiThread {
                 currentWebView?.evaluateJavascript("window.onNfcScanned && window.onNfcScanned('$tagId');", null)
             }
@@ -102,7 +105,6 @@ class MainActivity : ComponentActivity() {
 
         applyConfigUpdates()
 
-        // Запуск фонового сервиса для MQTT и веб-сервера
         val serviceIntent = Intent(this, KioskForegroundService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -117,9 +119,7 @@ class MainActivity : ComponentActivity() {
                 val batteryLevel by batteryTracker.batteryLevel.collectAsState()
                 val isCharging by batteryTracker.isCharging.collectAsState()
 
-                // Блокировка системного жеста и кнопки Назад
                 BackHandler(enabled = config.isKioskEnabled) {
-                    // Глушим нажатие назад в режиме киоска
                 }
 
                 var showPinDialog by remember { mutableStateOf(false) }
@@ -132,7 +132,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Регистрация коллбэка открытия настроек
                 openSettingsCallback = { showPinDialog = true }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -150,7 +149,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Скринсейвер
                     if (screensaverActive) {
                         TechScreensaver(
                             batteryLevel = batteryLevel,
@@ -159,7 +157,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // PIN диалог
                     if (showPinDialog) {
                         PinAuthDialog(
                             expectedPin = config.pinCode,
@@ -171,11 +168,57 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Экран настроек
                     if (showSettings) {
                         SettingsScreen(
                             mainActivity = this@MainActivity,
                             onClose = { showSettings = false }
+                        )
+                    }
+
+                    var showLauncherPrompt by remember {
+                        mutableStateOf(!deviceOwnerManager.isDefaultLauncher())
+                    }
+
+                    if (showLauncherPrompt) {
+                        AlertDialog(
+                            onDismissRequest = { showLauncherPrompt = false },
+                            containerColor = CyberCard,
+                            title = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Home, contentDescription = null, tint = NeonCyan)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Лаунчер по умолчанию",
+                                        color = NeonCyan,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                            },
+                            text = {
+                                Text(
+                                    "Сделайте Kiosk лаунчером по умолчанию, чтобы исключить запуск сторонних приложений в фоне.",
+                                    color = TextWhite,
+                                    fontSize = 13.sp
+                                )
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        showLauncherPrompt = false
+                                        deviceOwnerManager.requestDefaultLauncher(this@MainActivity)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                                ) {
+                                    Text("Сделать", color = CyberBlack, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showLauncherPrompt = false }) {
+                                    Text("Позже", color = TextMuted)
+                                }
+                            }
                         )
                     }
                 }
@@ -194,16 +237,12 @@ class MainActivity : ComponentActivity() {
     fun applyConfigUpdates() {
         val config = configRepository.getConfig()
 
-        // Удержание экрана включенным
         powerHelper.setKeepScreenOn(this, config.keepScreenOn)
-
-        // Настройка сторожевого таймера
+        powerHelper.acquireLocks()
         idleWatchdog.updateTimeoutSeconds(config.idleTimeoutSeconds, config.screensaverEnabled)
 
-        // Антивор
         motionTracker.isAntiTheftEnabled = config.antiTheftAlarmEnabled
 
-        // Применение режима киоска (блокировка экрана)
         if (config.isKioskEnabled) {
             if (deviceOwnerManager.isDeviceOwner) {
                 deviceOwnerManager.applyKioskPolicies(
@@ -211,6 +250,8 @@ class MainActivity : ComponentActivity() {
                     blockUsb = config.blockUsbFileTransfer,
                     disableStatusBar = config.blockSystemNavigation
                 )
+                deviceOwnerManager.setDefaultLauncher(true)
+                deviceOwnerManager.enforceStrictBackgroundRestrictions(config.allowedApps)
             }
             try {
                 startLockTask()
@@ -231,8 +272,13 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        deviceOwnerManager.clearKioskPolicies()
+        if (deviceOwnerManager.isDeviceOwner) {
+            deviceOwnerManager.clearKioskPolicies()
+            deviceOwnerManager.setDefaultLauncher(false)
+        }
         powerHelper.setKeepScreenOn(this, false)
+        powerHelper.releaseLocks()
+        configRepository.updateConfig { it.copy(isKioskEnabled = false) }
     }
 
     fun controlScreen(turnOn: Boolean) {
@@ -246,10 +292,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Моментальное пробуждение экрана при новом заказе или активности
+     */
     fun wakeUpFromScreensaver() {
-        _isScreensaverActive.value = false
-        powerHelper.setVirtualSleepBrightness(this, false)
-        idleWatchdog.resetTimer()
+        runOnUiThread {
+            _isScreensaverActive.value = false
+            powerHelper.setVirtualSleepBrightness(this, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+            } else {
+                @Suppress("DEPRECATION")
+                window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
+            idleWatchdog.resetTimer()
+        }
     }
 
     fun reloadCurrentPage() {
@@ -284,16 +345,13 @@ class MainActivity : ComponentActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    /**
-     * Блокировка аппаратных кнопок громкости и кнопки «Назад»
-     */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val config = configRepository.getConfig()
         if (config.isKioskEnabled && config.blockHardwareKeys) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP,
                 KeyEvent.KEYCODE_VOLUME_DOWN,
-                KeyEvent.KEYCODE_VOLUME_MUTE -> return true // глушим нажатие
+                KeyEvent.KEYCODE_VOLUME_MUTE -> return true
             }
         }
         return super.dispatchKeyEvent(event)
@@ -303,7 +361,6 @@ class MainActivity : ComponentActivity() {
     override fun onBackPressed() {
         val config = configRepository.getConfig()
         if (config.isKioskEnabled) {
-            // В режиме киоска кнопка назад заблокирована
             return
         }
         super.onBackPressed()

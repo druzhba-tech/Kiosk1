@@ -1,4 +1,4 @@
-package com.kiosk.browser.ui.screens
+﻿package com.kiosk.browser.ui.screens
 
 import android.view.ViewGroup
 import android.webkit.WebSettings
@@ -33,9 +33,8 @@ fun KioskWebScreen(
     val isCharging by mainActivity.batteryTracker.isCharging.collectAsState()
 
     var loadProgress by remember { mutableStateOf(0) }
-    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
 
-    // Защита от выгорания OLED: микро-сдвиг на 1-2 пикселя
+    // Защита OLED: смещение на 1-2px раз в 3 минуты
     val pixelShiftAnim = rememberInfiniteTransition(label = "pixelShift")
     val shiftX by pixelShiftAnim.animateFloat(
         initialValue = -1.5f,
@@ -47,17 +46,16 @@ fun KioskWebScreen(
         label = "shiftX"
     )
 
+    // Корневой Box: WebView + оверлеи поверх него
     Box(
         modifier = Modifier
             .fillMaxSize()
             .offset {
-                if (config.oledBurnInProtection) {
-                    IntOffset(shiftX.roundToInt(), 0)
-                } else {
-                    IntOffset.Zero
-                }
+                if (config.oledBurnInProtection) IntOffset(shiftX.roundToInt(), 0)
+                else IntOffset.Zero
             }
     ) {
+        // ── WebView на весь экран ──────────────────────────────────────────
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
@@ -65,7 +63,6 @@ fun KioskWebScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
@@ -77,41 +74,31 @@ fun KioskWebScreen(
                         mediaPlaybackRequiresUserGesture = false
                         cacheMode = WebSettings.LOAD_DEFAULT
                     }
-
                     val filterManager = UrlFilterManager(config.allowedUrls, config.blockedUrls)
                     webViewClient = KioskWebViewClient(
                         filterManager = filterManager,
                         isIgnoreSslErrors = { config.ignoreSslErrors },
-                        onCrashRecover = {
-                            post { loadUrl(config.startUrl) }
-                        },
-                        onPageLoaded = { url ->
-                            // Страница загружена
-                        }
+                        onCrashRecover = { post { loadUrl(config.startUrl) } },
+                        onPageLoaded = { _ -> }
                     )
-
                     webChromeClient = KioskWebChromeClient(
                         onProgressChanged = { progress -> loadProgress = progress },
-                        onFullscreenRequested = { /* обработка полноэкранного видео */ },
+                        onFullscreenRequested = { },
                         onFullscreenExit = { }
                     )
-
-                    // Внедрение JavaScript Bridge (window.kiosk)
                     val jsBridge = JavaScriptBridge(context, mainActivity.batteryTracker) { turnOn ->
                         mainActivity.controlScreen(turnOn)
                     }
                     addJavascriptInterface(jsBridge, "kiosk")
-                    addJavascriptInterface(jsBridge, "fully") // Совместимость с Fully Kiosk
-
+                    addJavascriptInterface(jsBridge, "fully")
                     loadUrl(config.startUrl)
-                    webViewInstance = this
                     mainActivity.currentWebView = this
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Индикатор загрузки страницы
+        // ── Прогресс загрузки ──────────────────────────────────────────────
         if (loadProgress in 1..99) {
             LinearProgressIndicator(
                 progress = loadProgress / 100f,
@@ -122,20 +109,21 @@ fun KioskWebScreen(
             )
         }
 
-        // Верхняя строка статуса: часы, WiFi/сигнал, батарея, статус киоска, кнопка перехода в лаунчер
+        // ── HUD-виджет: вертикальный, левый верхний угол, отступ ~28dp ────
+        // ~28dp ≈ 1 см на стандартной плотности (160 dpi)
         KioskStatusBar(
             batteryLevel = batteryLevel,
             isCharging = isCharging,
             isKioskActive = config.isKioskEnabled,
             onLauncherClick = onBackToLauncher,
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 28.dp)   // ≈ 1 см отступ от верхнего края
         )
 
-        // Скрытая зона тапа в правом верхнем углу (для вызова PIN-кода и настроек)
+        // ── Секретная зона (5 тапов → PIN) — правый верхний угол ─────────
         SecretTapOverlay(
-            onSecretTap = {
-                mainActivity.secretGestureDetector.onSecretAreaTapped()
-            },
+            onSecretTap = { mainActivity.secretGestureDetector.onSecretAreaTapped() },
             modifier = Modifier.align(Alignment.TopEnd)
         )
     }

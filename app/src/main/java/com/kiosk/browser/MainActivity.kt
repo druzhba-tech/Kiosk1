@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -22,6 +23,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiosk.browser.ui.theme.*
+import com.kiosk.browser.core.update.KioskUpdateManager
+import com.kiosk.browser.core.update.UpdateState
+import com.kiosk.browser.ui.components.FirstRunSetupDialog
+import com.kiosk.browser.ui.screens.PrimaryAppKioskScreen
+import com.kiosk.browser.ui.components.UpdateDialog
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -49,6 +57,7 @@ class MainActivity : ComponentActivity() {
     val deviceOwnerManager by lazy { DeviceOwnerManager(this) }
     val powerHelper by lazy { PowerManagerHelper(this) }
     val batteryTracker by lazy { BatteryTracker(this) }
+    val updateManager by lazy { KioskUpdateManager(this) }
 
     lateinit var motionTracker: MotionSensorTracker
     lateinit var idleWatchdog: IdleWatchdog
@@ -66,22 +75,20 @@ class MainActivity : ComponentActivity() {
 
         enableImmersiveMode()
 
-        // Инициализация трекера батареи
         batteryTracker.start()
 
-        // Инициализация антивора
         motionTracker = MotionSensorTracker(this) {
             triggerAntiTheftAlarm()
         }
         motionTracker.start()
 
-        // Инициализация таймера бездействия
         idleWatchdog = IdleWatchdog(
             onIdleTimeout = {
                 val config = configRepository.getConfig()
                 if (config.screensaverEnabled) {
                     _isScreensaverActive.value = true
                     if (config.virtualSleepEnabled) {
+                        // Энергосбережение: темный экран, но веб-сокет и аудио заказов слушают 24/7
                         powerHelper.setVirtualSleepBrightness(this, true)
                     }
                 }
@@ -94,22 +101,23 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // Секретный жест (5 тапов в правом верхнем углу)
         secretGestureDetector = SecretGestureDetector {
             triggerOpenSettings()
         }
 
-        // NFC Менеджер
         nfcManager = KioskNfcManager(this) { tagId ->
-            // При считывании NFC передаем ID в WebView
             runOnUiThread {
                 currentWebView?.evaluateJavascript("window.onNfcScanned && window.onNfcScanned('$tagId');", null)
             }
         }
 
         applyConfigUpdates()
+        // Автопроверка обновлений по воздуху (OTA)
+        lifecycleScope.launch {
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+            updateManager.checkForUpdates(versionName)
+        }
 
-        // Запуск фонового сервиса для MQTT и веб-сервера
         val serviceIntent = Intent(this, KioskForegroundService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -124,9 +132,7 @@ class MainActivity : ComponentActivity() {
                 val batteryLevel by batteryTracker.batteryLevel.collectAsState()
                 val isCharging by batteryTracker.isCharging.collectAsState()
 
-                // Блокировка системного жеста и кнопки Назад
                 BackHandler(enabled = config.isKioskEnabled) {
-                    // Глушим нажатие назад в режиме киоска
                 }
 
                 var showPinDialog by remember { mutableStateOf(false) }
@@ -139,11 +145,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Регистрация коллбэка открытия настроек
                 openSettingsCallback = { showPinDialog = true }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (isWebMode || config.isSingleAppMode) {
+                    if (config.primaryMode == "APP" && config.primaryAppPackage.isNotEmpty()) {
+                        PrimaryAppKioskScreen(
+                            packageName = config.primaryAppPackage,
+                            mainActivity = this@MainActivity,
+                            onOpenSettings = { showPinDialog = true }
+                        )
+                    } else if (isWebMode || config.isSingleAppMode) {
                         KioskWebScreen(
                             mainActivity = this@MainActivity,
                             onOpenSettingsRequested = { showPinDialog = true },
@@ -157,7 +168,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Скринсейвер
                     if (screensaverActive) {
                         TechScreensaver(
                             batteryLevel = batteryLevel,
@@ -166,7 +176,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // PIN диалог
                     if (showPinDialog) {
                         PinAuthDialog(
                             expectedPin = config.pinCode,
@@ -178,7 +187,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Экран настроек
                     if (showSettings) {
                         SettingsScreen(
                             mainActivity = this@MainActivity,
@@ -186,7 +194,40 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Диалог быстрого запроса на установку лаунчером по умолчанию в 1 клик
+                    // ── Диалог автообновления (OTA) ──
+                    val updateState by updateManager.updateState.collectAsState()
+                    UpdateDialog(
+                        state = updateState,
+                        onInstallClick = { downloadUrl ->
+                            lifecycleScope.launch {
+                                updateManager.downloadAndInstall(downloadUrl)
+                            }
+                        },
+                        onDismiss = { updateManager.dismiss() }
+                    )
+
+                    // ── Мастер первоначальной настройки при первом запуске ──
+                    if (!config.isFirstLaunchCompleted) {
+                        FirstRunSetupDialog(
+                            initialUrl = config.startUrl,
+                            initialPin = config.pinCode,
+                            onComplete = { mode, url, appPackage, pin ->
+                                configRepository.updateConfig {
+                                    it.copy(
+                                        primaryMode = mode,
+                                        startUrl = url,
+                                        primaryAppPackage = appPackage,
+                                        pinCode = pin,
+                                        isFirstLaunchCompleted = true,
+                                        allowedApps = if (appPackage.isNotEmpty() && !it.allowedApps.contains(appPackage))
+                                            it.allowedApps + appPackage else it.allowedApps
+                                    )
+                                }
+                                applyConfigUpdates()
+                            }
+                        )
+                    }
+
                     var showLauncherPrompt by remember {
                         mutableStateOf(!deviceOwnerManager.isDefaultLauncher())
                     }
@@ -200,7 +241,7 @@ class MainActivity : ComponentActivity() {
                                     Icon(Icons.Default.Home, contentDescription = null, tint = NeonCyan)
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        "ГЛАВНЫЙ ЭКРАН",
+                                        "Лаунчер по умолчанию",
                                         color = NeonCyan,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp,
@@ -210,7 +251,7 @@ class MainActivity : ComponentActivity() {
                             },
                             text = {
                                 Text(
-                                    "Установите Kiosk Gusar вместо заводского лаунчера, чтобы зафиксировать режим киоска и защитить устройство от выхода на рабочий стол.",
+                                    "Сделайте Kiosk лаунчером по умолчанию, чтобы исключить запуск сторонних приложений в фоне.",
                                     color = TextWhite,
                                     fontSize = 13.sp
                                 )
@@ -223,12 +264,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
                                 ) {
-                                    Text("УСТАНОВИТЬ В 1 КЛИК", color = CyberBlack, fontWeight = FontWeight.Bold)
+                                    Text("Сделать", color = CyberBlack, fontWeight = FontWeight.Bold)
                                 }
                             },
                             dismissButton = {
                                 TextButton(onClick = { showLauncherPrompt = false }) {
-                                    Text("ПОЗЖЕ", color = TextMuted)
+                                    Text("Позже", color = TextMuted)
                                 }
                             }
                         )
@@ -249,16 +290,12 @@ class MainActivity : ComponentActivity() {
     fun applyConfigUpdates() {
         val config = configRepository.getConfig()
 
-        // Удержание экрана включенным
         powerHelper.setKeepScreenOn(this, config.keepScreenOn)
-
-        // Настройка сторожевого таймера
+        powerHelper.acquireLocks()
         idleWatchdog.updateTimeoutSeconds(config.idleTimeoutSeconds, config.screensaverEnabled)
 
-        // Антивор
         motionTracker.isAntiTheftEnabled = config.antiTheftAlarmEnabled
 
-        // Применение режима киоска (блокировка экрана)
         if (config.isKioskEnabled) {
             if (deviceOwnerManager.isDeviceOwner) {
                 deviceOwnerManager.applyKioskPolicies(
@@ -267,6 +304,7 @@ class MainActivity : ComponentActivity() {
                     disableStatusBar = config.blockSystemNavigation
                 )
                 deviceOwnerManager.setDefaultLauncher(true)
+                deviceOwnerManager.enforceStrictBackgroundRestrictions(config.allowedApps)
             }
             try {
                 startLockTask()
@@ -279,6 +317,11 @@ class MainActivity : ComponentActivity() {
     fun startKioskMode() {
         configRepository.updateConfig { it.copy(isKioskEnabled = true) }
         applyConfigUpdates()
+        // Автопроверка обновлений по воздуху (OTA)
+        lifecycleScope.launch {
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+            updateManager.checkForUpdates(versionName)
+        }
     }
 
     fun exitKioskMode() {
@@ -292,6 +335,7 @@ class MainActivity : ComponentActivity() {
             deviceOwnerManager.setDefaultLauncher(false)
         }
         powerHelper.setKeepScreenOn(this, false)
+        powerHelper.releaseLocks()
         configRepository.updateConfig { it.copy(isKioskEnabled = false) }
     }
 
@@ -306,10 +350,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Моментальное пробуждение экрана при новом заказе или активности
+     */
     fun wakeUpFromScreensaver() {
-        _isScreensaverActive.value = false
-        powerHelper.setVirtualSleepBrightness(this, false)
-        idleWatchdog.resetTimer()
+        runOnUiThread {
+            _isScreensaverActive.value = false
+            powerHelper.setVirtualSleepBrightness(this, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+            } else {
+                @Suppress("DEPRECATION")
+                window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
+            idleWatchdog.resetTimer()
+        }
     }
 
     fun reloadCurrentPage() {
@@ -344,16 +403,13 @@ class MainActivity : ComponentActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    /**
-     * Блокировка аппаратных кнопок громкости и кнопки «Назад»
-     */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val config = configRepository.getConfig()
         if (config.isKioskEnabled && config.blockHardwareKeys) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP,
                 KeyEvent.KEYCODE_VOLUME_DOWN,
-                KeyEvent.KEYCODE_VOLUME_MUTE -> return true // глушим нажатие
+                KeyEvent.KEYCODE_VOLUME_MUTE -> return true
             }
         }
         return super.dispatchKeyEvent(event)
@@ -363,7 +419,6 @@ class MainActivity : ComponentActivity() {
     override fun onBackPressed() {
         val config = configRepository.getConfig()
         if (config.isKioskEnabled) {
-            // В режиме киоска кнопка назад заблокирована
             return
         }
         super.onBackPressed()

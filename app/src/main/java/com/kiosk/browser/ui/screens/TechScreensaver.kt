@@ -1,7 +1,8 @@
-package com.kiosk.browser.ui.screens
+﻿package com.kiosk.browser.ui.screens
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -9,12 +10,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +31,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
 
+/**
+ * Яркая высококонтрастная Cyber-HUD заставка для киоска
+ */
 @Composable
 fun TechScreensaver(
     batteryLevel: Int,
@@ -47,11 +54,11 @@ fun TechScreensaver(
         }
     }
 
-    // Защита от выгорания OLED: дрейф плашки времени по экрану
+    // Дрифт для защиты OLED
     val driftAnim = rememberInfiniteTransition(label = "screensaverDrift")
     val driftY by driftAnim.animateFloat(
-        initialValue = -30f,
-        targetValue = 30f,
+        initialValue = -25f,
+        targetValue = 25f,
         animationSpec = infiniteRepeatable(
             animation = tween(120_000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
@@ -59,13 +66,13 @@ fun TechScreensaver(
         label = "driftY"
     )
 
-    // Пульсация подсказки "Touch to wake"
+    // Пульсация надписи
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulseAnim.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.9f,
+        initialValue = 0.6f,
+        targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
+            animation = tween(1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseAlpha"
@@ -74,7 +81,7 @@ fun TechScreensaver(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF04060A))
+            .background(Color(0xFF060912))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -85,59 +92,83 @@ fun TechScreensaver(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.offset { IntOffset(0, driftY.roundToInt()) }
         ) {
-            // Часы
-            Text(
-                text = currentTime,
-                color = NeonCyan,
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 4.sp
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Дата
-            Text(
-                text = currentDate.uppercase(),
-                color = TextMuted,
-                fontSize = 14.sp,
-                letterSpacing = 2.sp
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Статус батареи
+            // Яркий статус KIOSK ONLINE
             Row(
-                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .background(CyberCard, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0x3300FF9D))
+                    .border(1.dp, NeonGreen, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    if (isCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryFull,
-                    contentDescription = null,
-                    tint = if (batteryLevel < 20) NeonRed else NeonGreen,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+                Icon(Icons.Default.Lock, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(16.dp))
                 Text(
-                    text = "$batteryLevel% • ${if (isCharging) "CHARGING" else "BATTERY"}",
-                    color = TextWhite,
-                    fontSize = 12.sp,
+                    text = "KIOSK SYSTEM ACTIVE",
+                    color = NeonGreen,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
-
+            // Яркие крупные неоновые часы
             Text(
-                text = "— НАЖМИТЕ ДЛЯ ПРОБУЖДЕНИЯ —",
-                color = TextMuted,
-                fontSize = 12.sp,
-                letterSpacing = 3.sp,
+                text = currentTime,
+                color = Color(0xFF00F0FF), // Чистый ультра-яркий циан
+                fontSize = 76.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 4.sp
+            )
+
+            // Дата
+            Text(
+                text = currentDate.uppercase(Locale.getDefault()),
+                color = Color(0xFFF8FAFC),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 2.sp
+            )
+
+            // Батарея
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0x331E293B))
+                    .border(1.dp, Color(0x6600F0FF), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = if (isCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryFull,
+                    contentDescription = null,
+                    tint = if (isCharging) NeonGreen else NeonCyan,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "$batteryLevel% ${if (isCharging) "(Зарядка)" else ""}",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Подсказка "Коснитесь экрана"
+            Text(
+                text = "▶ КОСНИТЕСЬ ЭКРАНА ДЛЯ ВХОДА ◀",
+                color = NeonCyan,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
                 modifier = Modifier.alpha(pulseAlpha)
             )
         }

@@ -11,6 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,16 +56,27 @@ fun SettingsScreen(
     var mqttEnabled by remember { mutableStateOf(currentConfig.mqttEnabled) }
     var allowedApps by remember { mutableStateOf(currentConfig.allowedApps) }
     var showAppPicker by remember { mutableStateOf(false) }
+    var showPrimaryAppPicker by remember { mutableStateOf(false) }
+    var primaryMode by remember { mutableStateOf(currentConfig.primaryMode) }
+    var primaryAppPackage by remember { mutableStateOf(currentConfig.primaryAppPackage) }
+    var isFirstLaunchCompleted by remember { mutableStateOf(currentConfig.isFirstLaunchCompleted) }
 
-    // OTA обновления
-    var updateCheckEnabled by remember { mutableStateOf(currentConfig.updateCheckEnabled) }
-    var updateManifestUrl by remember { mutableStateOf(currentConfig.updateManifestUrl) }
-    var updateCheckIntervalHours by remember { mutableStateOf(currentConfig.updateCheckIntervalHours.toString()) }
+    // Настройки информационной панели
+    var hudOrientation by remember { mutableStateOf(currentConfig.hudOrientation) }
+    var hudPosition by remember { mutableStateOf(currentConfig.hudPosition) }
+    var hudMarginCm by remember { mutableFloatStateOf(currentConfig.hudTopMarginCm) }
+    var hudShowBrightness by remember { mutableStateOf(currentConfig.hudShowBrightness) }
+    var hudShowWifi by remember { mutableStateOf(currentConfig.hudShowWifi) }
+    var hudShowBattery by remember { mutableStateOf(currentConfig.hudShowBattery) }
+    var hudShowKioskStatus by remember { mutableStateOf(currentConfig.hudShowKioskStatus) }
 
     fun saveAll() {
         mainActivity.configRepository.updateConfig {
             it.copy(
                 startUrl = startUrl,
+                primaryMode = primaryMode,
+                primaryAppPackage = primaryAppPackage,
+                isFirstLaunchCompleted = isFirstLaunchCompleted,
                 pinCode = pinCode,
                 idleTimeoutSeconds = idleTimeout.toIntOrNull() ?: 120,
                 mqttBroker = mqttBroker,
@@ -78,9 +91,13 @@ fun SettingsScreen(
                 antiTheftAlarmEnabled = antiTheft,
                 mqttEnabled = mqttEnabled,
                 allowedApps = allowedApps,
-                updateCheckEnabled = updateCheckEnabled,
-                updateManifestUrl = updateManifestUrl,
-                updateCheckIntervalHours = updateCheckIntervalHours.toIntOrNull() ?: 6
+                hudOrientation = hudOrientation,
+                hudPosition = hudPosition,
+                hudTopMarginCm = hudMarginCm,
+                hudShowBrightness = hudShowBrightness,
+                hudShowWifi = hudShowWifi,
+                hudShowBattery = hudShowBattery,
+                hudShowKioskStatus = hudShowKioskStatus
             )
         }
         mainActivity.applyConfigUpdates()
@@ -126,313 +143,404 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ── ГЛАВНАЯ КНОПКА: Включить/Выключить режим киоска ──────────────
+            // Главный статус киоска
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(
-                        width = if (isKiosk) 1.5.dp else 0.5.dp,
+                        width = 1.dp,
                         color = if (isKiosk) NeonGreen else NeonOrange,
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isKiosk)
-                        Color(0xFF0D2018)  // тёмно-зелёный при активном киоске
-                    else
-                        Color(0xFF1A1208)  // тёмно-оранжевый при неактивном
-                )
+                colors = CardDefaults.cardColors(containerColor = CyberCard)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            if (isKiosk) Icons.Default.Lock else Icons.Default.LockOpen,
-                            contentDescription = null,
-                            tint = if (isKiosk) NeonGreen else NeonOrange,
-                            modifier = Modifier.size(28.dp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isKiosk) "РЕЖИМ КИОСКА АКТИВЕН" else "РЕЖИМ КИОСКА ОТКЛЮЧЕН",
+                            color = if (isKiosk) NeonGreen else NeonOrange,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                        Column {
-                            Text(
-                                text = if (isKiosk) "KIOSK MODE АКТИВЕН" else "KIOSK MODE ВЫКЛЮЧЕН",
-                                color = if (isKiosk) NeonGreen else NeonOrange,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            )
-                            Text(
-                                text = if (isKiosk)
-                                    "Устройство заблокировано в режиме киоска"
-                                else
-                                    "Нажмите переключатель для включения",
-                                color = TextMuted,
-                                fontSize = 12.sp
-                            )
-                        }
+                        Text(
+                            text = if (isKiosk) "Блокировка навигации и выхода включена" else "Свободный доступ к системе",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
                     }
                     Switch(
                         checked = isKiosk,
                         onCheckedChange = { isKiosk = it },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = NeonGreen,
-                            checkedTrackColor = Color(0xFF1A4030),
-                            uncheckedThumbColor = NeonOrange,
-                            uncheckedTrackColor = Color(0xFF2A1A08)
+                            checkedThumbColor = CyberBlack,
+                            checkedTrackColor = NeonGreen,
+                            uncheckedThumbColor = TextMuted,
+                            uncheckedTrackColor = CyberSurface
                         )
                     )
                 }
             }
 
-            // Раздел: Основные параметры Web
-            SettingsCard(title = "ВЕБ-СТРАНИЦА И БРАУЗЕР", icon = Icons.Default.Language) {
-                OutlinedTextField(
-                    value = startUrl,
-                    onValueChange = { startUrl = it },
-                    label = { Text("Стартовый URL") },
-                    colors = cyberTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth()
+            // ── Карточка: Назначение Домашним экраном (Лаунчером) по умолчанию ──
+            val isDefaultHome = remember { mainActivity.deviceOwnerManager.isDefaultLauncher() }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = 1.dp,
+                        color = if (isDefaultHome) NeonGreen.copy(alpha = 0.6f) else NeonCyan.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                colors = CardDefaults.cardColors(containerColor = CyberCard)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Домашний экран (Лаунчер)",
+                            color = TextWhite,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isDefaultHome) "Kiosk уже назначен главным экраном устройства" else "Сделать Kiosk постоянным домашним экраном",
+                            color = if (isDefaultHome) NeonGreen else TextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                    if (!isDefaultHome) {
+                        Button(
+                            onClick = { mainActivity.deviceOwnerManager.requestDefaultLauncher(mainActivity) },
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Назначить", color = CyberBlack, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Активен",
+                            tint = NeonGreen,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+
+            // ── НОВАЯ ВКЛАДКА: НАСТРОЙКИ ИНФОРМАЦИОННОЙ ПАНЕЛИ (HUD) ──
+            SettingsCard(title = "Информационная панель (HUD)", icon = Icons.Default.Dashboard) {
+                // Ориентация панели
+                Text("Ориентация панели:", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = hudOrientation == "VERTICAL",
+                        onClick = { hudOrientation = "VERTICAL" },
+                        label = { Text("Вертикальная") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = hudOrientation == "HORIZONTAL",
+                        onClick = { hudOrientation = "HORIZONTAL" },
+                        label = { Text("Горизонтальная") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Расположение на экране
+                Text("Расположение панели:", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = hudPosition == "TOP_RIGHT",
+                        onClick = { hudPosition = "TOP_RIGHT" },
+                        label = { Text("Верх-Право") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = hudPosition == "TOP_LEFT",
+                        onClick = { hudPosition = "TOP_LEFT" },
+                        label = { Text("Верх-Лево") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Отступ от верхнего края
+                Text("Отступ от верхнего края: ${String.format("%.1f", hudMarginCm)} см", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Slider(
+                    value = hudMarginCm,
+                    onValueChange = { hudMarginCm = it },
+                    valueRange = 0.5f..4.0f,
+                    steps = 6,
+                    colors = SliderDefaults.colors(thumbColor = NeonCyan, activeTrackColor = NeonCyan)
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
 
+                // Переключатели элементов
+                SettingsToggle(
+                    title = "Кнопка регулировки яркости",
+                    subtitle = "Быстрый слайдер яркости при нажатии",
+                    checked = hudShowBrightness,
+                    onCheckedChange = { hudShowBrightness = it }
+                )
+                SettingsToggle(
+                    title = "Кнопка переключения Wi-Fi",
+                    subtitle = "Статус сети и открытие настроек Wi-Fi",
+                    checked = hudShowWifi,
+                    onCheckedChange = { hudShowWifi = it }
+                )
+                SettingsToggle(
+                    title = "Индикатор батареи и проценты",
+                    subtitle = "Иконка батареи и заряд в %",
+                    checked = hudShowBattery,
+                    onCheckedChange = { hudShowBattery = it }
+                )
+                SettingsToggle(
+                    title = "Иконка статуса KIOSK",
+                    subtitle = "Зеленый замочек активного режима",
+                    checked = hudShowKioskStatus,
+                    onCheckedChange = { hudShowKioskStatus = it }
+                )
+            }
+
+            // ── ОСНОВНОЙ РЕЖИМ РАБОТЫ (САЙТ ИЛИ ПРИЛОЖЕНИЕ) ──
+            SettingsCard(title = "Основной режим работы (по умолчанию)", icon = Icons.Default.Language) {
+                Text("Что запускать в киоске по умолчанию:", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = primaryMode == "WEB",
+                        onClick = { primaryMode = "WEB" },
+                        label = { Text("Веб-сайт (URL)") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = primaryMode == "APP",
+                        onClick = { primaryMode = "APP" },
+                        label = { Text("Android-приложение") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (primaryMode == "WEB") {
+                    OutlinedTextField(
+                        value = startUrl,
+                        onValueChange = { newValue: String -> startUrl = newValue },
+                        label = { Text("Стартовый веб-сайт (URL)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = CyberBorder,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextMuted,
+                            cursorColor = NeonCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AssistChip(
+                            onClick = { startUrl = "https://demo.home-assistant.io" },
+                            label = { Text("Home Assistant") }
+                        )
+                        AssistChip(
+                            onClick = { startUrl = "http://192.168.1.100:8123" },
+                            label = { Text("Локальный HA") }
+                        )
+                    }
+                } else {
+                    // Режим приложения
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (primaryAppPackage.isNotEmpty()) {
+                            val pm = context.packageManager
+                            val appLabel = remember(primaryAppPackage) {
+                                runCatching {
+                                    val info = pm.getApplicationInfo(primaryAppPackage, 0)
+                                    pm.getApplicationLabel(info).toString()
+                                }.getOrDefault(primaryAppPackage)
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0D2030))
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = NeonCyan)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(appLabel, color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(primaryAppPackage, color = TextMuted, fontSize = 10.sp)
+                                }
+                                TextButton(onClick = { showPrimaryAppPicker = true }) {
+                                    Text("Сменить", color = NeonCyan)
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = { showPrimaryAppPicker = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = CyberSurface),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            ) {
+                                Icon(Icons.Default.Apps, contentDescription = null, tint = NeonCyan)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Выбрать приложение по умолчанию", color = TextWhite)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = {
+                        isFirstLaunchCompleted = false
+                        Toast.makeText(context, "Мастер настройки запустится при следующем входе", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Сбросить и показать мастер настройки при старте", fontSize = 11.sp)
+                }
+            }
+
+            // Режим одного приложения
+            SettingsCard(title = "Режим приложений", icon = Icons.Default.Apps) {
+                SettingsToggle(
+                    title = "Режим одного приложения",
+                    subtitle = "Только веб-страница без лаунчера других приложений",
+                    checked = isSingleApp,
+                    onCheckedChange = { isSingleApp = it }
+                )
+                if (!isSingleApp) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { showAppPicker = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberSurface),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = NeonCyan)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Выбрать разрешенные приложения (${allowedApps.size})", color = NeonCyan)
+                    }
+                }
+            }
+
+            // Экран и заставка
+            SettingsCard(title = "Экран и энергосбережение", icon = Icons.Default.WbSunny) {
+                SettingsToggle(
+                    title = "Держать экран включенным",
+                    subtitle = "Предотвращает аппаратное засыпание дисплея",
+                    checked = keepScreenOn,
+                    onCheckedChange = { keepScreenOn = it }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsToggle(
+                    title = "Заставка (Скринсейвер)",
+                    subtitle = "Яркие Cyber HUD часы при отсутствии касаний",
+                    checked = screensaverEnabled,
+                    onCheckedChange = { screensaverEnabled = it }
+                )
+                if (screensaverEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = idleTimeout,
+                        onValueChange = { newValue: String -> idleTimeout = newValue },
+                        label = { Text("Таймаут перехода в заставку (сек)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = CyberBorder,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextMuted,
+                            cursorColor = NeonCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsToggle(
+                    title = "Защита от выгорания OLED",
+                    subtitle = "Микросмещение пикселей каждые несколько минут",
+                    checked = oledProtection,
+                    onCheckedChange = { oledProtection = it }
+                )
+            }
+
+            // Веб и сеть
+            SettingsCard(title = "Веб и сеть", icon = Icons.Default.Wifi) {
                 SettingsToggle(
                     title = "Игнорировать ошибки SSL",
-                    subtitle = "Необходимо для локальных серверов Home Assistant (https://192.168.x.x)",
+                    subtitle = "Необходимо для локальных серверов (https://192.168.x.x)",
                     checked = ignoreSsl,
                     onCheckedChange = { ignoreSsl = it }
                 )
             }
 
-            // Раздел: Приложения и Лаунчер
-            SettingsCard(title = "ПРИЛОЖЕНИЯ И ЛАУНЧЕР", icon = Icons.Default.Apps) {
-                SettingsToggle(
-                    title = "Одиночный режим (Single App)",
-                    subtitle = "Полноэкранная веб-страница без лаунчера других приложений",
-                    checked = isSingleApp,
-                    onCheckedChange = { isSingleApp = it }
+            // Безопасность и PIN
+            SettingsCard(title = "Безопасность и PIN-код", icon = Icons.Default.Lock) {
+                OutlinedTextField(
+                    value = pinCode,
+                    onValueChange = { newValue: String -> pinCode = newValue },
+                    label = { Text("Мастер-PIN код (по умолчанию: 1234)") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = CyberBorder,
+                        focusedLabelColor = NeonCyan,
+                        unfocusedLabelColor = TextMuted,
+                        cursorColor = NeonCyan,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
-
-                if (!isSingleApp) {
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Button(
-                        onClick = { showAppPicker = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Apps, contentDescription = null, tint = CyberBlack)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = if (allowedApps.isEmpty()) "ВЫБРАТЬ ПРИЛОЖЕНИЯ (РАЗРЕШЕНЫ ВСЕ)"
-                            else "ВЫБРАТЬ ПРИЛОЖЕНИЯ (${allowedApps.size} ВЫБРАНО)",
-                            color = CyberBlack,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    if (allowedApps.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Разрешённые (${allowedApps.size}):",
-                                color = TextMuted,
-                                fontSize = 12.sp
-                            )
-                            TextButton(
-                                onClick = { allowedApps = emptyList() },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                            ) {
-                                Text("Сбросить (все)", color = NeonOrange, fontSize = 11.sp)
-                            }
-                        }
-
-                        androidx.compose.foundation.lazy.LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        ) {
-                            items(allowedApps.size) { index ->
-                                val pkg = allowedApps[index]
-                                Surface(
-                                    color = CyberSurface,
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, CyberBorder)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = pkg.substringAfterLast('.'),
-                                            color = TextWhite,
-                                            fontSize = 12.sp
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        IconButton(
-                                            onClick = { allowedApps = allowedApps - pkg },
-                                            modifier = Modifier.size(18.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Close,
-                                                contentDescription = "Удалить",
-                                                tint = NeonRed,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Сейчас в лаунчере доступны все приложения планшета. Нажмите кнопку выше, чтобы разрешить только нужные.",
-                            color = TextMuted,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            }
-
-            // Раздел: Режим киоска и защита
-            SettingsCard(title = "РЕЖИМ КИОСКА И БЕЗОПАСНОСТЬ", icon = Icons.Default.Security) {
+                Spacer(modifier = Modifier.height(12.dp))
                 SettingsToggle(
-                    title = "Блокировка кнопок громкости",
-                    subtitle = "Перехват аппаратных клавиш устройства",
+                    title = "Блокировать аппаратные кнопки",
+                    subtitle = "Громкость и навигация системы",
                     checked = blockKeys,
                     onCheckedChange = { blockKeys = it }
                 )
-
-                OutlinedTextField(
-                    value = pinCode,
-                    onValueChange = { pinCode = it },
-                    label = { Text("PIN-код администратора") },
-                    colors = cyberTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Статус Device Owner: ${if (mainActivity.deviceOwnerManager.isDeviceOwner) "АКТИВЕН ✓" else "НЕ АКТИВЕН (Обычные права)"}",
-                    color = if (mainActivity.deviceOwnerManager.isDeviceOwner) NeonGreen else NeonOrange,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                val isDefaultHome = remember { mainActivity.deviceOwnerManager.isDefaultLauncher() }
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Button(
-                    onClick = {
-                        mainActivity.deviceOwnerManager.requestDefaultLauncher(mainActivity)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isDefaultHome) Color(0xFF133826) else NeonCyan
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Home,
-                        contentDescription = null,
-                        tint = if (isDefaultHome) NeonGreen else CyberBlack
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (isDefaultHome) "✓ ГЛАВНЫЙ ЭКРАН ПО УМОЛЧАНИЮ" else "СДЕЛАТЬ ГЛАВНЫМ ЭКРАНОМ (В 1 КЛИК)",
-                        color = if (isDefaultHome) NeonGreen else CyberBlack,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
             }
 
-            // Раздел: Экран и питание
-            SettingsCard(title = "ЭКРАН И ЭНЕРГОСБЕРЕЖЕНИЕ", icon = Icons.Default.BrightnessMedium) {
-                SettingsToggle(
-                    title = "Держать экран включенным (Keep Screen On)",
-                    subtitle = "Предотвращает засыпание дисплея",
-                    checked = keepScreenOn,
-                    onCheckedChange = { keepScreenOn = it }
-                )
-
-                SettingsToggle(
-                    title = "Защита OLED от выгорания (Pixel Shift)",
-                    subtitle = "Периодическое смещение интерфейса на 1-2px",
-                    checked = oledProtection,
-                    onCheckedChange = { oledProtection = it }
-                )
-
-                SettingsToggle(
-                    title = "Хранитель экрана (Screensaver)",
-                    subtitle = "Кибер-часы при бездействии",
-                    checked = screensaverEnabled,
-                    onCheckedChange = { screensaverEnabled = it }
-                )
-
-                OutlinedTextField(
-                    value = idleTimeout,
-                    onValueChange = { idleTimeout = it },
-                    label = { Text("Таймаут бездействия (сек)") },
-                    colors = cyberTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Раздел: Сенсоры и антивор
-            SettingsCard(title = "ДАТЧИКИ И АНТИВОР", icon = Icons.Default.Sensors) {
-                SettingsToggle(
-                    title = "Антивор (Детекция перемещения)",
-                    subtitle = "Срабатывание при снятии планшета со стены",
-                    checked = antiTheft,
-                    onCheckedChange = { antiTheft = it }
-                )
-            }
-
-            // Раздел: MQTT и Home Assistant
-            SettingsCard(title = "MQTT & HOME ASSISTANT", icon = Icons.Default.Hub) {
-                SettingsToggle(
-                    title = "Активировать MQTT клиент",
-                    subtitle = "Отправка статуса батареи и прием команд управления",
-                    checked = mqttEnabled,
-                    onCheckedChange = { mqttEnabled = it }
-                )
-
-                OutlinedTextField(
-                    value = mqttBroker,
-                    onValueChange = { mqttBroker = it },
-                    label = { Text("IP адрес MQTT брокера") },
-                    colors = cyberTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = mqttPort,
-                    onValueChange = { mqttPort = it },
-                    label = { Text("Порт MQTT (по умолчанию 1883)") },
-                    colors = cyberTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Раздел: Импорт / Экспорт конфигурации
-            SettingsCard(title = "УПРАВЛЕНИЕ КОНФИГУРАЦИЕЙ", icon = Icons.Default.Save) {
+            // Резервная копия
+            SettingsCard(title = "Резервная копия конфигурации", icon = Icons.Default.Save) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -441,128 +549,28 @@ fun SettingsScreen(
                         onClick = {
                             val json = mainActivity.configRepository.exportConfigJson()
                             clipboardManager.setText(AnnotatedString(json))
-                            Toast.makeText(context, "Конфиг скопирован в буфер обмена!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Конфигурация скопирована!", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                        modifier = Modifier.weight(1f)
                     ) {
                         Text("Экспорт JSON")
                     }
-
-                    OutlinedButton(
-                        onClick = {
-                            val clip = clipboardManager.getText()?.text
-                            if (!clip.isNullOrBlank()) {
-                                val result = mainActivity.configRepository.importConfigJson(clip)
-                                if (result.isSuccess) {
-                                    Toast.makeText(context, "Конфиг успешно импортирован!", Toast.LENGTH_SHORT).show()
-                                    onClose()
-                                } else {
-                                    Toast.makeText(context, "Ошибка разбора JSON!", Toast.LENGTH_SHORT).show()
-                                }
-                            } else {
-                                Toast.makeText(context, "Буфер обмена пуст!", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonGreen)
-                    ) {
-                        Text("Импорт JSON")
-                    }
                 }
             }
 
-            // Раздел: OTA Обновления
-            SettingsCard(title = "OTA ОБНОВЛЕНИЯ", icon = Icons.Default.SystemUpdate) {
-                SettingsToggle(
-                    title = "Автоматическая проверка обновлений",
-                    subtitle = "Приложение будет проверять наличие новой версии по расписанию",
-                    checked = updateCheckEnabled,
-                    onCheckedChange = { updateCheckEnabled = it }
-                )
-
-                if (updateCheckEnabled) {
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = updateManifestUrl,
-                        onValueChange = { updateManifestUrl = it },
-                        label = { Text("URL манифеста обновления") },
-                        placeholder = { Text("http://192.168.1.100/update.json", color = TextMuted) },
-                        colors = cyberTextFieldColors(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "Формат файла: {\"version_name\":\"1.2.0\",\"apk_url\":\"http://.../app.apk\"}",
-                        color = TextMuted,
-                        fontSize = 10.sp,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = updateCheckIntervalHours,
-                        onValueChange = { updateCheckIntervalHours = it },
-                        label = { Text("Интервал проверки (часов)") },
-                        colors = cyberTextFieldColors(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Кнопка ручной проверки
-                    Button(
-                        onClick = {
-                            val app = mainActivity.application as com.kiosk.browser.KioskApp
-                            if (updateManifestUrl.isNotBlank()) {
-                                app.updateManager.checkForUpdate()
-                                Toast.makeText(context, "Проверка обновлений запущена...", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Укажите URL манифеста!", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = CyberBlack, modifier = androidx.compose.ui.Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("ПРОВЕРИТЬ СЕЙЧАС", color = CyberBlack, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            // Раздел: Аварийный выход
-            OutlinedButton(
-                onClick = {
-                    mainActivity.exitKioskMode()
-                    Toast.makeText(context, "Киоск выключен", Toast.LENGTH_SHORT).show()
-                    onClose()
-                },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonRed),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.ExitToApp, contentDescription = null, tint = NeonRed)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("ВЫЙТИ ИЗ РЕЖИМА КИОСКА (UNLOCK)")
-            }
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
     if (showAppPicker) {
         AppPickerDialog(
             selectedPackages = allowedApps,
-            onConfirm = { selectedList ->
-                allowedApps = selectedList
+            onConfirm = { selected: List<String> ->
+                allowedApps = selected
                 showAppPicker = false
             },
-            onDismiss = {
-                showAppPicker = false
-            }
+            onDismiss = { showAppPicker = false }
         )
     }
 }
@@ -574,12 +582,15 @@ private fun SettingsCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, CyberBorder, RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = CyberCard)
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CyberCard),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -587,8 +598,7 @@ private fun SettingsCard(
                     text = title,
                     color = NeonCyan,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                    fontWeight = FontWeight.Bold
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -605,35 +615,23 @@ private fun SettingsToggle(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, color = TextWhite, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(text = subtitle, color = TextMuted, fontSize = 12.sp)
+            Text(text = subtitle, color = TextMuted, fontSize = 11.sp)
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = NeonCyan,
-                checkedTrackColor = CyberSurface
+                checkedThumbColor = CyberBlack,
+                checkedTrackColor = NeonCyan,
+                uncheckedThumbColor = TextMuted,
+                uncheckedTrackColor = CyberSurface
             )
         )
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun cyberTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = NeonCyan,
-    unfocusedBorderColor = CyberBorder,
-    focusedLabelColor = NeonCyan,
-    unfocusedLabelColor = TextMuted,
-    cursorColor = NeonCyan,
-    focusedTextColor = TextWhite,
-    unfocusedTextColor = TextWhite
-)

@@ -4,7 +4,6 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
-import com.kiosk.browser.core.update.UpdateManager
 import com.kiosk.browser.data.repository.ConfigRepository
 
 class KioskApp : Application() {
@@ -12,14 +11,10 @@ class KioskApp : Application() {
     lateinit var configRepository: ConfigRepository
         private set
 
-    lateinit var updateManager: UpdateManager
-        private set
-
     override fun onCreate() {
         super.onCreate()
         instance = this
         configRepository = ConfigRepository(this)
-        updateManager = UpdateManager(this)
         createNotificationChannel()
     }
 

@@ -12,8 +12,8 @@ android {
         applicationId = "com.kiosk.browser"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -73,6 +73,9 @@ dependencies {
 
     // WebView
     implementation("androidx.webkit:webkit:1.10.0")
+
+    // Swipe to Refresh
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
     // MQTT Client for Home Assistant & Telemetry
     implementation("com.hivemq:hivemq-mqtt-client:1.3.3")

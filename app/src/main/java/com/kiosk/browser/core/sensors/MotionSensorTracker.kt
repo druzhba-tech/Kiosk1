@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.core.sensors
+package com.kiosk.browser.core.sensors
 
 import android.content.Context
 import android.hardware.Sensor
@@ -35,14 +35,9 @@ class MotionSensorTracker(
     private var isFirstAccel = true
 
     fun start() {
-        // Регистрируем акселерометр только если включена антикражная сигнализация,
-        // чтобы не расходовать батарею постоянной обработкой прерываний
-        if (isAntiTheftEnabled) {
-            accelerometer?.let {
-                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-            }
+        accelerometer?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
-        // Датчик света с медленной частотой обновления
         lightSensor?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
@@ -57,8 +52,6 @@ class MotionSensorTracker(
 
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                if (!isAntiTheftEnabled) return
-
                 val x = event.values[0]
                 val y = event.values[1]
                 val z = event.values[2]
@@ -82,7 +75,9 @@ class MotionSensorTracker(
 
                 if (totalDelta > sensitivityThreshold) {
                     _isDeviceMoved.value = true
-                    onAntiTheftTriggered()
+                    if (isAntiTheftEnabled) {
+                        onAntiTheftTriggered()
+                    }
                 }
             }
 

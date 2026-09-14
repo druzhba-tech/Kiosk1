@@ -14,21 +14,25 @@ class PowerManagerHelper(private val context: Context) {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
-    /**
-     * Захватывать локи только по необходимости, а не держать постоянную нагрузку на аккумулятор
-     */
+    init {
+        // Удержание Wi-Fi в активном состоянии при 24/7 работе
+        wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Kiosk:WifiLock").apply {
+            setReferenceCounted(false)
+        }
+    }
+
     fun acquireLocks() {
         try {
-            if (wifiLock == null) {
-                // Используем энергоэффективный режим вместо агрессивного постоянного High Perf
-                @Suppress("DEPRECATION")
-                wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL, "Kiosk:WifiLock").apply {
+            if (wakeLock == null) {
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "Kiosk:PartialWakeLock"
+                ).apply {
                     setReferenceCounted(false)
                 }
             }
-            if (wifiLock?.isHeld != true) {
-                wifiLock?.acquire()
-            }
+            wakeLock?.acquire(10 * 60 * 1000L /* 10 min safe timeout or hold */)
+            wifiLock?.acquire()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -43,6 +47,9 @@ class PowerManagerHelper(private val context: Context) {
         }
     }
 
+    /**
+     * Включение флага KeepScreenOn для Activity
+     */
     fun setKeepScreenOn(activity: Activity, keepOn: Boolean) {
         activity.runOnUiThread {
             if (keepOn) {
@@ -54,24 +61,12 @@ class PowerManagerHelper(private val context: Context) {
     }
 
     /**
-     * Снижение яркости до абсолютного минимума в режиме виртуального сна,
-     * что экономит до 85% энергии подсветки экрана
+     * Виртуальный сон: уменьшение яркости экрана до 0 (без выключения ОС и блокировки)
      */
-        /**
-     * Ручная установка рабочей яркости дисплея (от 0.05 до 1.0)
-     */
-    fun setScreenBrightness(activity: Activity, brightness: Float) {
-        activity.runOnUiThread {
-            val layoutParams = activity.window.attributes
-            layoutParams.screenBrightness = brightness.coerceIn(0.05f, 1.0f)
-            activity.window.attributes = layoutParams
-        }
-    }
-
     fun setVirtualSleepBrightness(activity: Activity, sleep: Boolean) {
         activity.runOnUiThread {
             val layoutParams = activity.window.attributes
-            layoutParams.screenBrightness = if (sleep) 0.005f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            layoutParams.screenBrightness = if (sleep) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             activity.window.attributes = layoutParams
         }
     }

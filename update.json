@@ -1,0 +1,8 @@
+{
+  "version_name": "1.0.0",
+  "version_code": 1,
+  "apk_url": "https://github.com/ТВОЙ_USERNAME/kiosk-browser/releases/download/v1.0.0/app-release-unsigned.apk",
+  "release_notes": "Первый стабильный релиз",
+  "mandatory": false,
+  "min_android_sdk": 26
+}

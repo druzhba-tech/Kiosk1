@@ -1,0 +1,154 @@
+name: 🚀 Build & Release APK
+
+on:
+  # Запускается при каждом push в main/master
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*.*.*'        # Авто-релиз при тегах вида v1.0.0
+
+  # Запускается при pull request
+  pull_request:
+    branches: [ main, master ]
+
+  # Ручной запуск из вкладки Actions → кнопка "Run workflow"
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Тип сборки'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 1: Сборка APK
+  # ─────────────────────────────────────────────────────────────────────────────
+  build:
+    name: 🔨 Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout репозитория
+        uses: actions/checkout@v4
+
+      - name: ☕ Установка JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: 🔑 Права на запуск gradlew
+        run: chmod +x gradlew
+
+      - name: 📦 Кэш Gradle (ускоряет повторные сборки)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # ── Debug сборка ──────────────────────────────────────────────────────────
+      - name: 🐛 Сборка Debug APK
+        if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/') }}
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      # ── Release сборка (только при тегах v*.*.*) ──────────────────────────────
+      - name: 🏭 Сборка Release APK (unsigned)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: ./gradlew assembleRelease --stacktrace --no-daemon
+
+      # ── Информация о собранном APK ────────────────────────────────────────────
+      - name: 📊 Информация об APK
+        run: |
+          echo "=== Debug APK ===" || true
+          find app/build/outputs/apk/debug -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "Debug APK не найден"
+          echo "=== Release APK ===" || true
+          find app/build/outputs/apk/release -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "Release APK не найден"
+
+      # ── Загрузка Debug APK как артефакт GitHub ────────────────────────────────
+      - name: 📤 Загрузка Debug APK
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: KioskBrowser-Debug-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      # ── Загрузка Release APK как артефакт GitHub ──────────────────────────────
+      - name: 📤 Загрузка Release APK
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: KioskBrowser-Release-${{ github.ref_name }}
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 90
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2: Создание GitHub Release (только при push тега v*.*.*)
+  # ─────────────────────────────────────────────────────────────────────────────
+  release:
+    name: 🎉 GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: write   # Необходимо для создания релиза
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📥 Скачать APK из артефактов
+        uses: actions/download-artifact@v4
+        with:
+          name: KioskBrowser-Release-${{ github.ref_name }}
+          path: ./release-apk
+
+      - name: 📋 Список файлов релиза
+        run: ls -la ./release-apk/
+
+      - name: 🎉 Создание GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Kiosk Browser ${{ github.ref_name }}"
+          body: |
+            ## 📱 Kiosk Browser ${{ github.ref_name }}
+
+            ### 🚀 Установка
+            1. Скачайте APK файл ниже
+            2. Разрешите установку из неизвестных источников
+            3. Установите APK через ADB:
+            ```bash
+            adb install -r KioskBrowser-*.apk
+            ```
+
+            ### 🔐 Активация Device Owner
+            ```bash
+            adb shell dpm set-device-owner com.kiosk.browser/.admin.KioskDeviceAdminReceiver
+            ```
+
+            ### ⚙️ Вход в настройки
+            - Нажмите **5 раз** в правый верхний угол
+            - PIN по умолчанию: **`1234`**
+
+            ### 🆘 Аварийный сброс через ADB
+            ```bash
+            adb shell am broadcast -a com.kiosk.RESET_LOCK --es key "SECRET_KIOSK_KEY_777"
+            ```
+          draft: false
+          prerelease: false
+          files: ./release-apk/*.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

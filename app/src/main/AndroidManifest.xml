@@ -1,25 +1,30 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- РЎРµС‚СЊ Рё СЃРІСЏР·СЊ -->
+    <!-- Сеть и связь -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
-    <!-- РџРёС‚Р°РЅРёРµ Рё С„РѕРЅРѕРІР°СЏ СЂР°Р±РѕС‚Р° -->
+    <!-- Питание и фоновая работа -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
-    <!-- РђРїРїР°СЂР°С‚РЅС‹Рµ РјРѕРґСѓР»Рё -->
+    <!-- Аппаратные модули -->
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.REORDER_TASKS" />
 
-    <!-- Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё РґР»СЏ WebRTC Рё СЃРєР°РЅРёСЂРѕРІР°РЅРёСЏ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ) -->
+    <!-- OTA Обновления -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Дополнительные функции для WebRTC и сканирования (опционально) -->
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.light" android:required="false" />
@@ -37,7 +42,7 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="34">
 
-        <!-- Р“Р»Р°РІРЅРѕРµ Activity: Р›Р°СѓРЅС‡РµСЂ Рё РљРёРѕСЃРє -->
+        <!-- Главное Activity: Лаунчер и Киоск -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -63,7 +68,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Device Admin Receiver РґР»СЏ Device Owner Рё РїРѕР»РёС‚РёРє Р±Р»РѕРєРёСЂРѕРІРєРё -->
+        <!-- Device Admin Receiver для Device Owner и политик блокировки -->
         <receiver
             android:name=".admin.KioskDeviceAdminReceiver"
             android:description="@string/device_admin_description"
@@ -80,7 +85,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- РђРІР°СЂРёР№РЅС‹Р№ ADB BroadcastReceiver РґР»СЏ РІС‹С…РѕРґР° РёР· РєРёРѕСЃРєР° СЂР°Р·СЂР°Р±РѕС‚С‡РёРєРѕРј -->
+        <!-- Аварийный ADB BroadcastReceiver для выхода из киоска разработчиком -->
         <receiver
             android:name=".core.security.EmergencyBroadcastReceiver"
             android:exported="true">
@@ -91,7 +96,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Р РµСЃРёРІРµСЂ Р°РІС‚РѕР·Р°РїСѓСЃРєР° РїСЂРё РІРєР»СЋС‡РµРЅРёРё СѓСЃС‚СЂРѕР№СЃС‚РІР° -->
+        <!-- Ресивер автозапуска при включении устройства -->
         <receiver
             android:name=".core.power.BootReceiver"
             android:enabled="true"
@@ -102,7 +107,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Р¤РѕРЅРѕРІС‹Р№ СЃРµСЂРІРёСЃ РґР»СЏ MQTT-РєР»РёРµРЅС‚Р° Рё Р»РѕРєР°Р»СЊРЅРѕРіРѕ HTTP REST API -->
+        <!-- Фоновый сервис для MQTT-клиента и локального HTTP REST API -->
         <service
             android:name=".service.KioskForegroundService"
             android:enabled="true"
@@ -113,21 +118,14 @@
                 android:value="kiosk_iot_bridge" />
         </service>
 
-        <!-- FileProvider для установки APK обновлений -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
-
-        <!-- Receiver завершения установки обновлений -->
+        <!-- Получатель результата Silent Install (OTA обновления) -->
         <receiver
-            android:name=".core.update.KioskUpdateReceiver"
-            android:exported="false" />
+            android:name=".core.update.InstallResultReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.kiosk.UPDATE_INSTALL_COMPLETE" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -62,6 +62,15 @@ class KioskForegroundService : Service() {
                 publishTelemetry()
             }
         }
+
+        // 4. Проверка OTA-обновлений
+        if (config.updateCheckEnabled && config.updateManifestUrl.isNotBlank()) {
+            val intervalMs = config.updateCheckIntervalHours.toLong() * 3_600_000L
+            KioskApp.instance.updateManager.startPeriodicCheck(
+                manifestUrl = config.updateManifestUrl,
+                intervalMs = intervalMs
+            )
+        }
     }
 
     private fun publishTelemetry() {

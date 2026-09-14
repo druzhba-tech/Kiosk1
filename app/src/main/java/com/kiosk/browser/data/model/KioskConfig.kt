@@ -4,31 +4,19 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class KioskConfig(
-    // Стартовый веб-сайт и основной режим
+    // Основные настройки веб-киоска
     val startUrl: String = "https://demo.home-assistant.io",
-    val primaryMode: String = "WEB", // "WEB" (Веб-сайт) или "APP" (Android-приложение)
-    val primaryAppPackage: String = "", // Пакет приложения по умолчанию (например com.example.app)
-    val isFirstLaunchCompleted: Boolean = false, // Завершена ли первоначальная настройка
     val isKioskEnabled: Boolean = true,
     val isSingleAppMode: Boolean = true,
     val pinCode: String = "1234",
     val emergencyAdbKey: String = "SECRET_KIOSK_KEY_777",
 
-    // Экран, сон и заставка
+    // Питание, экран и заставка
     val keepScreenOn: Boolean = true,
     val idleTimeoutSeconds: Int = 120,
     val screensaverEnabled: Boolean = true,
     val oledBurnInProtection: Boolean = true,
     val virtualSleepEnabled: Boolean = true,
-
-    // Настройки информационной панели (HUD)
-    val hudPosition: String = "TOP_RIGHT", // "TOP_RIGHT", "TOP_LEFT", "BOTTOM_RIGHT", "BOTTOM_LEFT"
-    val hudTopMarginCm: Float = 2.0f,
-    val hudOrientation: String = "VERTICAL", // "VERTICAL", "HORIZONTAL"
-    val hudShowBrightness: Boolean = true,
-    val hudShowWifi: Boolean = true,
-    val hudShowBattery: Boolean = true,
-    val hudShowKioskStatus: Boolean = true,
 
     // Блокировки и безопасность
     val blockHardwareKeys: Boolean = true,
@@ -36,18 +24,18 @@ data class KioskConfig(
     val blockUsbFileTransfer: Boolean = false,
     val blockSafeMode: Boolean = false,
 
-    // Браузер и сеть
+    // Веб-движок и надежность
     val ignoreSslErrors: Boolean = true,
     val clearDataOnIdle: Boolean = false,
     val autoReloadOnNetworkRecover: Boolean = true,
-    val dailyRebootTimeHour: Int = 4,
+    val dailyRebootTimeHour: Int = 4, // 04:00 утра плановый рестарт WebView
     val allowedUrls: List<String> = listOf("http://*", "https://*"),
     val blockedUrls: List<String> = emptyList(),
 
-    // Разрешенные приложения
+    // Приложения лаунчера
     val allowedApps: List<String> = emptyList(),
 
-    // Охрана и датчики
+    // Сенсоры и антивор
     val antiTheftAlarmEnabled: Boolean = false,
     val motionSensitivity: Float = 2.5f,
     val lightSensorAdaptiveBrightness: Boolean = false,
@@ -62,5 +50,10 @@ data class KioskConfig(
     val mqttTopicPrefix: String = "kiosk/device",
     val haDiscoveryEnabled: Boolean = true,
     val remoteAdminPort: Int = 8080,
-    val remoteAdminEnabled: Boolean = true
+    val remoteAdminEnabled: Boolean = true,
+
+    // OTA Обновления
+    val updateCheckEnabled: Boolean = false,
+    val updateManifestUrl: String = "",        // URL JSON-манифеста: {"version_name":"1.1.0","apk_url":"http://..."}
+    val updateCheckIntervalHours: Int = 6      // Интервал проверки в часах
 )

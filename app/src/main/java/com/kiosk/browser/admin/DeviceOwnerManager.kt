@@ -1,11 +1,8 @@
-﻿package com.kiosk.browser.admin
+package com.kiosk.browser.admin
 
-import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.UserManager
 
@@ -20,19 +17,22 @@ class DeviceOwnerManager(private val context: Context) {
     val isAdminActive: Boolean
         get() = dpm.isAdminActive(adminComponent)
 
+    /**
+     * Запрос прав администратора устройства через системный диалог
+     */
     fun requestDeviceAdmin(activity: android.app.Activity) {
         val intent = android.content.Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
             putExtra(
                 DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                "Необходимо для обеспечения режима киоска и блокировки фона."
+                "Необходимо для включения блокировки режима киоска."
             )
         }
         activity.startActivity(intent)
     }
 
     /**
-     * Применение политик Kiosk: изоляция одного приложения, запрет Safe Mode, USB и шторки
+     * Применение политик жесткой защиты (Safe Mode, USB, статус-бар)
      */
     fun applyKioskPolicies(
         blockSafeMode: Boolean,
@@ -42,8 +42,10 @@ class DeviceOwnerManager(private val context: Context) {
         if (!isDeviceOwner) return
 
         try {
+            // Разрешаем текущему приложению использовать LockTaskMode без диалогов
             dpm.setLockTaskPackages(adminComponent, arrayOf(context.packageName))
 
+            // Блокировка безопасного режима Safe Mode
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 if (blockSafeMode) {
                     dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_SAFE_BOOT)
@@ -54,6 +56,7 @@ class DeviceOwnerManager(private val context: Context) {
                 }
             }
 
+            // Блокировка USB
             if (blockUsb) {
                 dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_USB_FILE_TRANSFER)
                 dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
@@ -62,67 +65,25 @@ class DeviceOwnerManager(private val context: Context) {
                 dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
             }
 
+            // Полное отключение статус-бара (Android 6.0+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 dpm.setStatusBarDisabled(adminComponent, disableStatusBar)
             }
 
+            // Настройка фич LockTask (блокировка системных диалогов выключения)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 dpm.setLockTaskFeatures(
                     adminComponent,
                     DevicePolicyManager.LOCK_TASK_FEATURE_NONE
                 )
             }
-
-            // Автоматически включаем жесткие ограничения для сторонних приложений
-            enforceStrictBackgroundRestrictions(listOf(context.packageName))
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     /**
-     * Заморозка (Suspend) всех сторонних приложений и очистка их фоновых процессов,
-     * чтобы они вообще не могли просыпаться, слать уведомления или потреблять батарею.
-     */
-    fun enforceStrictBackgroundRestrictions(whitelistedPackages: List<String>) {
-        if (!isDeviceOwner) return
-
-        try {
-            val pm = context.packageManager
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-
-            val packagesToSuspend = mutableListOf<String>()
-
-            for (app in installedApps) {
-                val pkg = app.packageName
-                val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                val isUpdatedSystem = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-
-                // Не трогаем себя и разрешенные приложения
-                if (whitelistedPackages.contains(pkg) || pkg == context.packageName) {
-                    continue
-                }
-
-                // Замораживаем несистемные пользовательские приложения (игры, соцсети, браузеры и т.д.)
-                if (!isSystem || isUpdatedSystem) {
-                    packagesToSuspend.add(pkg)
-                    try {
-                        am.killBackgroundProcesses(pkg)
-                    } catch (_: Exception) {}
-                }
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && packagesToSuspend.isNotEmpty()) {
-                dpm.setPackagesSuspended(adminComponent, packagesToSuspend.toTypedArray(), true)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    /**
-     * Снятие ограничений фоновых процессов при выходе из киоска
+     * Снятие блокировок перед выходом из режима киоска
      */
     fun clearKioskPolicies() {
         if (!isDeviceOwner) return
@@ -132,19 +93,14 @@ class DeviceOwnerManager(private val context: Context) {
             }
             dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_SAFE_BOOT)
             dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_USB_FILE_TRANSFER)
-
-            // Разморозка приложений
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val pm = context.packageManager
-                val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-                val suspended = installedApps.map { it.packageName }.toTypedArray()
-                dpm.setPackagesSuspended(adminComponent, suspended, false)
-            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
+    /**
+     * Установка/снятие постоянного лаунчера по умолчанию (требует Device Owner)
+     */
     fun setDefaultLauncher(enable: Boolean) {
         if (!isDeviceOwner) return
         try {
@@ -163,6 +119,9 @@ class DeviceOwnerManager(private val context: Context) {
         }
     }
 
+    /**
+     * Проверка, является ли Kiosk Gusar лаунчером (домашним экраном) по умолчанию
+     */
     fun isDefaultLauncher(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
@@ -180,6 +139,9 @@ class DeviceOwnerManager(private val context: Context) {
         return resolveInfo?.activityInfo?.packageName == context.packageName
     }
 
+    /**
+     * Запрос на установку лаунчером по умолчанию в 1 клик (через системный диалог RoleManager)
+     */
     fun requestDefaultLauncher(activity: android.app.Activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = activity.getSystemService(android.app.role.RoleManager::class.java)
@@ -192,6 +154,7 @@ class DeviceOwnerManager(private val context: Context) {
             }
         }
 
+        // Fallback для Android 9 и ниже
         try {
             val intent = android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS)
             activity.startActivity(intent)
@@ -206,6 +169,9 @@ class DeviceOwnerManager(private val context: Context) {
         }
     }
 
+    /**
+     * Перезагрузка устройства (требует Device Owner, Android 7.0+)
+     */
     fun rebootDevice() {
         if (!isDeviceOwner) return
         try {

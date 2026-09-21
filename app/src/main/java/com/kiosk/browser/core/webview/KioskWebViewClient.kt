@@ -64,6 +64,34 @@ class KioskWebViewClient(
 
         // Внедряем автоматический перехват звуков и оповещений о новом заказе
         injectOrderAlertWakeHook(view)
+        // Блокируем выделение текста и контекстное меню на веб-страницах
+        injectTextSelectionBlock(view)
+    }
+
+    /**
+     * Блокировка выделения текста и контекстного меню браузера
+     */
+    private fun injectTextSelectionBlock(view: WebView?) {
+        val script = """
+            (function() {
+                try {
+                    if (document.getElementById('__kiosk_no_select__')) return;
+                    var style = document.createElement('style');
+                    style.id = '__kiosk_no_select__';
+                    style.innerHTML = '* { -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; } input, textarea, [contenteditable="true"] { -webkit-user-select: text !important; user-select: text !important; -webkit-touch-callout: default !important; }';
+                    if (document.head) {
+                        document.head.appendChild(style);
+                    } else if (document.documentElement) {
+                        document.documentElement.appendChild(style);
+                    }
+                    document.addEventListener('contextmenu', function(e) {
+                        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+                        e.preventDefault();
+                    }, false);
+                } catch(e) {}
+            })();
+        """.trimIndent()
+        view?.evaluateJavascript(script, null)
     }
 
     /**

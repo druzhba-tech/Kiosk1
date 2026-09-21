@@ -1,6 +1,12 @@
 package com.kiosk.browser.ui.screens
 
+import android.os.Build
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.compose.animation.core.*
@@ -65,6 +71,26 @@ fun KioskWebScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
+                    // Блокировка выделения текста и всплывающего меню
+                    isLongClickable = false
+                    isHapticFeedbackEnabled = false
+                    setOnLongClickListener { true }
+
+                    customSelectionActionModeCallback = object : ActionMode.Callback {
+                        override fun onCreateActionMode(mode: ActionMode?, menu: Menu?) = false
+                        override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) = false
+                        override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?) = false
+                        override fun onDestroyActionMode(mode: ActionMode?) {}
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        customInsertionActionModeCallback = object : ActionMode.Callback {
+                            override fun onCreateActionMode(mode: ActionMode?, menu: Menu?) = false
+                            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) = false
+                            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?) = false
+                            override fun onDestroyActionMode(mode: ActionMode?) {}
+                        }
+                    }
+
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
@@ -75,7 +101,20 @@ fun KioskWebScreen(
                         loadWithOverviewMode = true
                         mediaPlaybackRequiresUserGesture = false
                         cacheMode = WebSettings.LOAD_DEFAULT
+
+                        // Запоминание паролей и автозаполнение
+                        saveFormData = true
+                        @Suppress("DEPRECATION")
+                        savePassword = true
                     }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
+                    }
+
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
                 }
 
                 val swipeRefresh = SwipeRefreshLayout(context).apply {

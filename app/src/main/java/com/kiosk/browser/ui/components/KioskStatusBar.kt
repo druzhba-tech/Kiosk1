@@ -79,8 +79,9 @@ fun KioskStatusBar(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    // Состояние диалога яркости
+    // Состояние диалога яркости и Wi-Fi
     var showBrightnessDialog by remember { mutableStateOf(false) }
+    var showWifiDialog by remember { mutableStateOf(false) }
     var currentBrightness by remember { mutableFloatStateOf(0.8f) }
 
     // Состояние увеличения панели при касании
@@ -273,26 +274,7 @@ fun KioskStatusBar(
                     .background(if (isExpanded) CyberSurface.copy(alpha = 0.6f) else Color.Transparent)
                     .clickable {
                         notifyInteraction()
-                        val mainAct = (context as? MainActivity) ?: MainActivity.currentInstance
-                        if (mainAct != null) {
-                            mainAct.openWifiSettings()
-                        } else {
-                            try {
-                                val intent = Intent(Settings.ACTION_WIFI_SETTINGS).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                try {
-                                    val fallback = Intent(Settings.ACTION_SETTINGS).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(fallback)
-                                } catch (ex: Exception) {
-                                    ex.printStackTrace()
-                                }
-                            }
-                        }
+                        showWifiDialog = true
                     }
                     .padding(itemPadding)
             ) {
@@ -552,5 +534,12 @@ fun KioskStatusBar(
                 }
             }
         }
+    }
+
+    // Диалог управления Wi-Fi
+    if (showWifiDialog) {
+        WifiControlDialog(
+            onDismiss = { showWifiDialog = false }
+        )
     }
 }

@@ -87,6 +87,12 @@ class DeviceOwnerManager(private val context: Context) {
                 )
             }
 
+            // Защита системных настроек: блокируем доступ к Bluetooth, приложениям, аккаунтам и сбросу
+            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_BLUETOOTH)
+            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_APPS_CONTROL)
+            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_MODIFY_ACCOUNTS)
+            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
+
             // Автоматически включаем ограничения для сторонних приложений (кроме разрешенных)
             enforceStrictBackgroundRestrictions(listOf(context.packageName) + whitelistedPackages)
         } catch (e: Exception) {
@@ -146,6 +152,10 @@ class DeviceOwnerManager(private val context: Context) {
             }
             dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_SAFE_BOOT)
             dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_USB_FILE_TRANSFER)
+            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_BLUETOOTH)
+            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_APPS_CONTROL)
+            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_MODIFY_ACCOUNTS)
+            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
 
             // Разморозка приложений
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

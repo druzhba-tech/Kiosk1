@@ -123,15 +123,15 @@ class MainActivity : ComponentActivity() {
         }
 
         applyConfigUpdates()
-        // Фоновая периодическая проверка обновлений: через 60 секунд после старта и далее раз в 4 часа
+        // Фоновая автоматическая проверка обновлений: через 5 секунд после старта и далее каждые 15 минут
         lifecycleScope.launch {
-            delay(60_000L)
+            delay(5_000L)
             while (isActive) {
                 val versionName = runCatching {
                     packageManager.getPackageInfo(packageName, 0).versionName
                 }.getOrNull() ?: "1.0.0"
                 updateManager.checkForUpdates(versionName)
-                delay(4 * 3600 * 1000L)
+                delay(15 * 60 * 1000L)
             }
         }
 
@@ -354,42 +354,31 @@ class MainActivity : ComponentActivity() {
      */
     fun openWifiSettings() {
         runOnUiThread {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    try {
-                        val panelIntent = Intent(android.provider.Settings.Panel.ACTION_WIFI).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(panelIntent)
-                        return@runOnUiThread
-                    } catch (_: Exception) {}
-
-                    try {
-                        val internetPanelIntent = Intent(android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(internetPanelIntent)
-                        return@runOnUiThread
-                    } catch (_: Exception) {}
-                }
-
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
-                    stopLockTask()
+                    val panelIntent = Intent(android.provider.Settings.Panel.ACTION_WIFI).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(panelIntent)
+                    return@runOnUiThread
                 } catch (_: Exception) {}
 
+                try {
+                    val internetPanelIntent = Intent(android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(internetPanelIntent)
+                    return@runOnUiThread
+                } catch (_: Exception) {}
+            }
+
+            try {
                 val wifiIntent = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 startActivity(wifiIntent)
             } catch (e: Exception) {
-                try {
-                    val fallback = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(fallback)
-                } catch (ex: Exception) {
-                    ex.printStackTrace()
-                }
+                android.widget.Toast.makeText(this, "Панель Wi-Fi недоступна", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -516,6 +505,20 @@ class MainActivity : ComponentActivity() {
             return
         }
         super.onBackPressed()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        enableImmersiveMode()
+        if (deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
+            deviceOwnerManager.setDefaultLauncher(true)
+        }
+        val versionName = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrNull() ?: "1.0.0"
+        lifecycleScope.launch {
+            updateManager.checkForUpdates(versionName)
+        }
     }
 
     override fun onDestroy() {

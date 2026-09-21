@@ -32,10 +32,17 @@ jobs:
       - name: Build Debug APK with Gradle Wrapper
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
+      - name: Extract Version
+        id: get_version
+        run: |
+          VERSION=$(grep 'versionName = ' app/build.gradle.kts | head -n 1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KioskBrowser-Debug-APK
+          name: KioskBrowser-v${{ steps.get_version.outputs.version }}
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
 
@@ -43,14 +50,15 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.7
-          name: Kiosk Browser v1.0.7
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Kiosk Browser v${{ steps.get_version.outputs.version }}
           body: |
-            Обновление Kiosk Browser v1.0.7:
-            - Устранена автозагрузка Home Assistant: киоск открывает только выбранный сайт или приложение
-            - Исправлен мастер первоначальной настройки: фон не загружает сторонний сайт в процессе выбора
-            - Добавлен реактивный перезапуск WebView при смене URL
-            - Полная поддержка запуска и фиксации сторонних приложений в режиме APP (белый список LockTask)
+            Обновление Kiosk Browser v${{ steps.get_version.outputs.version }}:
+            - Блокировка выделения текста на веб-страницах (запрет вызова лупы, копирования и контекстных меню)
+            - Функция автосохранения и запоминания паролей пользователей в браузере
+            - Встроенный диалог управления Wi-Fi сетями: запрещен переход в общие системные настройки планшета
+            - Автоматическая фоновая проверка обновлений (каждые 15 минут) для моментального появления значка обновления на всех устройствах
+            - Автоматическое именование APK файлов с указанием версии (kiosk-browser-v${{ steps.get_version.outputs.version }}.apk)
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

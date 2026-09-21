@@ -35,6 +35,7 @@ import com.kiosk.browser.data.model.KioskConfig
 import com.kiosk.browser.ui.components.AppPickerDialog
 import com.kiosk.browser.ui.theme.*
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

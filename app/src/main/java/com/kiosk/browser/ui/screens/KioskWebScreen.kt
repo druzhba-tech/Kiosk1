@@ -1,9 +1,6 @@
 package com.kiosk.browser.ui.screens
 
 import android.os.Build
-import android.view.ActionMode
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -66,11 +63,7 @@ fun KioskWebScreen(
         // ── Полноэкранный WebView с Pull-to-Refresh ──
         AndroidView(
             factory = { context ->
-                val webView = object : WebView(context) {
-                    override fun startActionMode(callback: ActionMode?): ActionMode? = null
-                    override fun startActionMode(callback: ActionMode.Callback?): ActionMode? = null
-                    override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? = null
-                }.apply {
+                val webView = WebView(context).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT

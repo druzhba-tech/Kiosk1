@@ -48,14 +48,30 @@ class KioskUpdateManager(private val context: Context) {
     }
 
     /**
+     * Проверка целостности APK архива перед передачей установщику
+     */
+    fun isValidApk(file: File): Boolean {
+        if (!file.exists() || file.length() < 1024 * 1024) return false
+        return try {
+            java.util.zip.ZipFile(file).use { zip ->
+                zip.getEntry("AndroidManifest.xml") != null && zip.getEntry("classes.dex") != null
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Удалить старые закэшированные версии APK
      */
     private fun cleanOldApkCache(keepVersionTag: String) {
         try {
             val keepName = "kiosk-update-v$keepVersionTag.apk"
             context.cacheDir.listFiles()?.forEach { file ->
-                if (file.name.startsWith("kiosk-update") && file.name.endsWith(".apk") && file.name != keepName) {
-                    file.delete()
+                if (file.name.startsWith("kiosk-update") && (file.name.endsWith(".apk") || file.name.endsWith(".tmp"))) {
+                    if (file.name != keepName) {
+                        file.delete()
+                    }
                 }
             }
         } catch (_: Exception) {}
@@ -104,21 +120,26 @@ class KioskUpdateManager(private val context: Context) {
 
                 if (apkDownloadUrl.isNotEmpty() && isNewerVersion(latestTag, currentVersionName)) {
                     val cachedApk = getApkFile(latestTag)
-                    // Если обновление уже полностью скачано в кэш — не скачиваем повторно!
-                    if (cachedApk.exists() && cachedApk.length() > 0 && (apkSize <= 0L || cachedApk.length() == apkSize)) {
-                        android.util.Log.i("KioskUpdateManager", "Обновление v$latestTag уже в кэше (${cachedApk.length()} байт). Готово к установке без повторной загрузки!")
-                        val ready = UpdateState.ReadyToInstall(cachedApk, latestTag)
-                        _updateState.value = ready
-                        return@withContext ready
+                    // Если обновление уже полностью скачано в кэш и прошло проверку целостности — не скачиваем повторно!
+                    if (cachedApk.exists()) {
+                        if (isValidApk(cachedApk) && (apkSize <= 0L || cachedApk.length() == apkSize)) {
+                            android.util.Log.i("KioskUpdateManager", "Обновление v$latestTag уже в кэше и проверено (${cachedApk.length()} байт). Готово к установке!")
+                            val ready = UpdateState.ReadyToInstall(cachedApk, latestTag)
+                            _updateState.value = ready
+                            return@withContext ready
+                        } else {
+                            android.util.Log.w("KioskUpdateManager", "Кэшированный APK поврежден или неполон. Удаление и повторная загрузка...")
+                            cachedApk.delete()
+                        }
                     }
 
                     cleanOldApkCache(latestTag)
 
-                    android.util.Log.i("KioskUpdateManager", "Обновление $latestTag доступно. Запуск фоновой докачки...")
+                    android.util.Log.i("KioskUpdateManager", "Обновление $latestTag доступно. Запуск фоновой загрузки...")
                     val available = UpdateState.Available(latestTag, apkDownloadUrl, releaseNotes)
                     _updateState.value = available
 
-                    // Сразу запускаем скачивание/докачку в фоне, не блокируя работу пользователя в киоске
+                    // Сразу запускаем скачивание в фоне, не блокируя работу пользователя в киоске
                     startBackgroundDownload(apkDownloadUrl, latestTag, apkSize)
                     return@withContext available
                 } else {
@@ -155,78 +176,63 @@ class KioskUpdateManager(private val context: Context) {
     }
 
     /**
-     * Фоновая загрузка/докачка APK файла с поддержкой HTTP Range без блокировки киоска
+     * Безопасная фоновая загрузка APK во временный файл с валидацией архива
      */
     fun startBackgroundDownload(downloadUrl: String, versionName: String, expectedSize: Long = 0L) {
         if (isDownloading) return
         scope.launch {
             isDownloading = true
             try {
-                val updateFile = getApkFile(versionName)
-                val existingBytes = if (updateFile.exists()) updateFile.length() else 0L
-
-                // Если уже полностью скачан
-                if (expectedSize > 0 && existingBytes == expectedSize) {
-                    android.util.Log.i("KioskUpdateManager", "Файл v$versionName уже полностью загружен ($existingBytes байт).")
-                    _updateState.value = UpdateState.ReadyToInstall(updateFile, versionName)
+                val targetFile = getApkFile(versionName)
+                if (isValidApk(targetFile) && (expectedSize <= 0 || targetFile.length() == expectedSize)) {
+                    android.util.Log.i("KioskUpdateManager", "Файл v$versionName уже полностью загружен и валиден.")
+                    _updateState.value = UpdateState.ReadyToInstall(targetFile, versionName)
                     return@launch
                 }
+
+                val tempFile = File(context.cacheDir, "kiosk-update-v$versionName.apk.tmp")
+                if (tempFile.exists()) tempFile.delete()
 
                 val conn = URL(downloadUrl).openConnection() as HttpURLConnection
                 conn.setRequestProperty("User-Agent", "Kiosk-App-Updater")
                 conn.instanceFollowRedirects = true
                 conn.connectTimeout = 15000
                 conn.readTimeout = 30000
-
-                // Докачка (HTTP Range) если есть частично скачанный файл
-                val resume = existingBytes > 0 && (expectedSize <= 0 || existingBytes < expectedSize)
-                if (resume) {
-                    conn.setRequestProperty("Range", "bytes=$existingBytes-")
-                    android.util.Log.i("KioskUpdateManager", "Возобновление докачки v$versionName с байта $existingBytes...")
-                }
                 conn.connect()
 
-                val responseCode = conn.responseCode
-                val append = resume && responseCode == HttpURLConnection.HTTP_PARTIAL
-
-                val totalLength = if (append) {
-                    existingBytes + conn.contentLengthLong
-                } else {
-                    conn.contentLengthLong
-                }
-
-                val startOffset = if (append) existingBytes else 0L
-                if (!append && updateFile.exists()) {
-                    updateFile.delete()
-                }
-
+                val totalLength = if (expectedSize > 0) expectedSize else conn.contentLengthLong
                 var lastReportedPercent = -1
 
                 conn.inputStream.use { input ->
-                    FileOutputStream(updateFile, append).use { output ->
-                        val data = ByteArray(8192)
-                        var currentTotal = startOffset
+                    FileOutputStream(tempFile).use { output ->
+                        val data = ByteArray(16384)
+                        var currentTotal: Long = 0
                         var count: Int
                         while (input.read(data).also { count = it } != -1) {
                             currentTotal += count
                             output.write(data, 0, count)
-                            val targetTotal = if (expectedSize > 0) expectedSize else totalLength
-                            if (targetTotal > 0) {
-                                val percent = ((currentTotal * 100) / targetTotal).toInt().coerceIn(0, 100)
+                            if (totalLength > 0) {
+                                val percent = ((currentTotal * 100) / totalLength).toInt().coerceIn(0, 100)
                                 if (percent != lastReportedPercent && (percent % 2 == 0 || percent == 100)) {
                                     lastReportedPercent = percent
-                                    _updateState.value = UpdateState.Downloading(percent, currentTotal, targetTotal, versionName)
+                                    _updateState.value = UpdateState.Downloading(percent, currentTotal, totalLength, versionName)
                                 }
                             }
                         }
                     }
                 }
 
-                if (updateFile.exists() && updateFile.length() > 0) {
-                    android.util.Log.i("KioskUpdateManager", "Обновление v$versionName готово (${updateFile.length()} байт)!")
-                    _updateState.value = UpdateState.ReadyToInstall(updateFile, versionName)
+                // Проверяем целостность скачанного APK
+                if (isValidApk(tempFile) && (expectedSize <= 0 || tempFile.length() == expectedSize)) {
+                    if (targetFile.exists()) targetFile.delete()
+                    val renamed = tempFile.renameTo(targetFile)
+                    val finalFile = if (renamed) targetFile else tempFile
+                    android.util.Log.i("KioskUpdateManager", "Обновление v$versionName успешно загружено и проверено (${finalFile.length()} байт)!")
+                    _updateState.value = UpdateState.ReadyToInstall(finalFile, versionName)
                 } else {
-                    _updateState.value = UpdateState.Error("Файл обновления пуст")
+                    android.util.Log.e("KioskUpdateManager", "Файл обновления не прошел проверку целостности (размер: ${tempFile.length()})")
+                    tempFile.delete()
+                    _updateState.value = UpdateState.Error("Ошибка целостности загруженного файла")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("KioskUpdateManager", "Ошибка фонового скачивания: ${e.message}")

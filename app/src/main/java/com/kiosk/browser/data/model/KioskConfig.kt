@@ -26,6 +26,7 @@ data class KioskConfig(
     val hudTopMarginCm: Float = 2.0f,
     val hudOrientation: String = "VERTICAL", // "VERTICAL", "HORIZONTAL"
     val hudShowBrightness: Boolean = true,
+    val hudShowVolume: Boolean = true,
     val hudShowWifi: Boolean = true,
     val hudShowBattery: Boolean = true,
     val hudShowKioskStatus: Boolean = true,

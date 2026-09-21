@@ -73,6 +73,7 @@ fun SettingsScreen(
     var hudPosition by remember { mutableStateOf(currentConfig.hudPosition) }
     var hudMarginCm by remember { mutableFloatStateOf(currentConfig.hudTopMarginCm) }
     var hudShowBrightness by remember { mutableStateOf(currentConfig.hudShowBrightness) }
+    var hudShowVolume by remember { mutableStateOf(currentConfig.hudShowVolume) }
     var hudShowWifi by remember { mutableStateOf(currentConfig.hudShowWifi) }
     var hudShowBattery by remember { mutableStateOf(currentConfig.hudShowBattery) }
     var hudShowKioskStatus by remember { mutableStateOf(currentConfig.hudShowKioskStatus) }
@@ -117,6 +118,7 @@ fun SettingsScreen(
                 hudPosition = hudPosition,
                 hudTopMarginCm = hudMarginCm,
                 hudShowBrightness = hudShowBrightness,
+                hudShowVolume = hudShowVolume,
                 hudShowWifi = hudShowWifi,
                 hudShowBattery = hudShowBattery,
                 hudShowKioskStatus = hudShowKioskStatus
@@ -454,6 +456,12 @@ fun SettingsScreen(
                     onCheckedChange = { hudShowBrightness = it }
                 )
                 SettingsToggle(
+                    title = "Кнопка микшера громкости",
+                    subtitle = "Быстрый регулятор звука медиа и оповещений",
+                    checked = hudShowVolume,
+                    onCheckedChange = { hudShowVolume = it }
+                )
+                SettingsToggle(
                     title = "Кнопка переключения Wi-Fi",
                     subtitle = "Статус сети и открытие настроек Wi-Fi",
                     checked = hudShowWifi,
@@ -682,6 +690,111 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Доступ к push-уведомлениям (для сторонних приложений)", fontSize = 11.sp, color = NeonCyan)
+                        }
+                    }
+                }
+            }
+
+            // ── МИКШЕР ГРОМКОСТИ УСТРОЙСТВА ──
+            val audioManager = remember { context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
+            val maxMediaVol = remember { audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+            var mediaVol by remember { mutableIntStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)) }
+            val maxNotifVol = remember { audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_NOTIFICATION).coerceAtLeast(1) }
+            var notifVol by remember { mutableIntStateOf(audioManager.getStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION)) }
+
+            SettingsCard(title = "Микшер громкости устройства", icon = Icons.Default.VolumeUp) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // Мультимедиа и звуки заказов
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Медиа и звуки заказов (сайты / видео)", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text("${(mediaVol * 100 / maxMediaVol)}%", color = NeonGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val newVol = if (mediaVol > 0) 0 else (maxMediaVol / 2)
+                                    mediaVol = newVol
+                                    audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (mediaVol == 0) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
+                                    contentDescription = null,
+                                    tint = if (mediaVol == 0) NeonRed else NeonGreen,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Slider(
+                                value = mediaVol.toFloat(),
+                                onValueChange = { newVal ->
+                                    val intVal = newVal.roundToInt()
+                                    mediaVol = intVal
+                                    audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, intVal, 0)
+                                },
+                                valueRange = 0f..maxMediaVol.toFloat(),
+                                steps = (maxMediaVol - 1).coerceAtLeast(0),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = NeonGreen,
+                                    activeTrackColor = NeonGreen,
+                                    inactiveTrackColor = CyberSurface
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    // Уведомления и вызовы
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Уведомления и звонок системы", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text("${(notifVol * 100 / maxNotifVol)}%", color = NeonCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val newVol = if (notifVol > 0) 0 else (maxNotifVol / 2)
+                                    notifVol = newVol
+                                    audioManager.setStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION, newVol, 0)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (notifVol == 0) Icons.Default.NotificationsOff else Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = if (notifVol == 0) NeonRed else NeonCyan,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Slider(
+                                value = notifVol.toFloat(),
+                                onValueChange = { newVal ->
+                                    val intVal = newVal.roundToInt()
+                                    notifVol = intVal
+                                    audioManager.setStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION, intVal, 0)
+                                },
+                                valueRange = 0f..maxNotifVol.toFloat(),
+                                steps = (maxNotifVol - 1).coerceAtLeast(0),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = NeonCyan,
+                                    activeTrackColor = NeonCyan,
+                                    inactiveTrackColor = CyberSurface
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }

@@ -223,6 +223,7 @@ fun KioskWebScreen(
             isKioskActive = config.isKioskEnabled,
             isVertical = config.hudOrientation.equals("VERTICAL", ignoreCase = true),
             showBrightness = config.hudShowBrightness,
+            showVolume = config.hudShowVolume,
             showWifi = config.hudShowWifi,
             showBattery = config.hudShowBattery,
             showKioskStatus = config.hudShowKioskStatus,

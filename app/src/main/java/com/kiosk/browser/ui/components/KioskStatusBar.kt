@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
@@ -65,6 +66,7 @@ fun KioskStatusBar(
     isKioskActive: Boolean,
     isVertical: Boolean = true,
     showBrightness: Boolean = true,
+    showVolume: Boolean = true,
     showWifi: Boolean = true,
     showBattery: Boolean = true,
     showKioskStatus: Boolean = true,
@@ -79,8 +81,16 @@ fun KioskStatusBar(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    // Состояние диалога яркости и Wi-Fi
+    // Управление звуком и громкостью
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val maxMediaVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    var mediaVolume by remember { mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
+    val maxNotifVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION).coerceAtLeast(1) }
+    var notifVolume by remember { mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)) }
+
+    // Состояние диалогов яркости, громкости и Wi-Fi
     var showBrightnessDialog by remember { mutableStateOf(false) }
+    var showVolumeDialog by remember { mutableStateOf(false) }
     var showWifiDialog by remember { mutableStateOf(false) }
     var currentBrightness by remember { mutableFloatStateOf(0.8f) }
 
@@ -134,6 +144,10 @@ fun KioskStatusBar(
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 updateNetwork()
+                try {
+                    mediaVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    notifVolume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
+                } catch (_: Exception) {}
             }
         }
         val filter = IntentFilter().apply {
@@ -141,6 +155,7 @@ fun KioskStatusBar(
             addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
             @Suppress("DEPRECATION")
             addAction(ConnectivityManager.CONNECTIVITY_ACTION)
+            addAction("android.media.VOLUME_CHANGED_ACTION")
         }
         context.registerReceiver(receiver, filter)
         onDispose {
@@ -325,6 +340,32 @@ fun KioskStatusBar(
                     imageVector = Icons.Default.WbSunny,
                     contentDescription = "Яркость",
                     tint = NeonOrange,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+        }
+
+        // 4. Кнопка регулировки громкости (микшер)
+        if (showVolume) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (isExpanded) CyberSurface.copy(alpha = 0.6f) else Color.Transparent)
+                    .clickable {
+                        notifyInteraction()
+                        showVolumeDialog = true
+                    }
+                    .padding(itemPadding)
+            ) {
+                val volIcon = when {
+                    mediaVolume == 0 -> Icons.Default.VolumeMute
+                    mediaVolume < maxMediaVolume / 2 -> Icons.Default.VolumeDown
+                    else -> Icons.Default.VolumeUp
+                }
+                Icon(
+                    imageVector = volIcon,
+                    contentDescription = "Громкость",
+                    tint = NeonGreen,
                     modifier = Modifier.size(iconSize)
                 )
             }
@@ -599,6 +640,164 @@ fun KioskStatusBar(
                     Button(
                         onClick = { showBrightnessDialog = false },
                         colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Готово", color = CyberBlack, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    // Диалог микшера громкости
+    if (showVolumeDialog) {
+        Dialog(onDismissRequest = { showVolumeDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CyberCard),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .border(1.dp, NeonGreen.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.VolumeUp, contentDescription = null, tint = NeonGreen)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Микшер громкости",
+                            color = TextWhite,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // 1. Мультимедиа (браузер, звук заказов, видео)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Медиа и оповещения",
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${(mediaVolume * 100 / maxMediaVolume)}%",
+                                color = NeonGreen,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val newVol = if (mediaVolume > 0) 0 else (maxMediaVolume / 2)
+                                    mediaVolume = newVol
+                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (mediaVolume == 0) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
+                                    contentDescription = null,
+                                    tint = if (mediaVolume == 0) NeonRed else NeonGreen,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Slider(
+                                value = mediaVolume.toFloat(),
+                                onValueChange = { newVal ->
+                                    val intVal = newVal.roundToInt()
+                                    mediaVolume = intVal
+                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, intVal, 0)
+                                },
+                                valueRange = 0f..maxMediaVolume.toFloat(),
+                                steps = (maxMediaVolume - 1).coerceAtLeast(0),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = NeonGreen,
+                                    activeTrackColor = NeonGreen,
+                                    inactiveTrackColor = CyberSurface
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    // 2. Уведомления и сигналы
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Уведомления и звонок",
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${(notifVolume * 100 / maxNotifVolume)}%",
+                                color = NeonCyan,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val newVol = if (notifVolume > 0) 0 else (maxNotifVolume / 2)
+                                    notifVolume = newVol
+                                    audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, newVol, 0)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (notifVolume == 0) Icons.Default.NotificationsOff else Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = if (notifVolume == 0) NeonRed else NeonCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Slider(
+                                value = notifVolume.toFloat(),
+                                onValueChange = { newVal ->
+                                    val intVal = newVal.roundToInt()
+                                    notifVolume = intVal
+                                    audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, intVal, 0)
+                                },
+                                valueRange = 0f..maxNotifVolume.toFloat(),
+                                steps = (maxNotifVolume - 1).coerceAtLeast(0),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = NeonCyan,
+                                    activeTrackColor = NeonCyan,
+                                    inactiveTrackColor = CyberSurface
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = { showVolumeDialog = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Готово", color = CyberBlack, fontWeight = FontWeight.Bold)

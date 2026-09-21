@@ -1,5 +1,6 @@
 package com.kiosk.browser.ui.screens
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -461,7 +462,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Экран и заставка
+            // Экран и энергосбережение
             SettingsCard(title = "Экран и энергосбережение", icon = Icons.Default.WbSunny) {
                 SettingsToggle(
                     title = "Держать экран включенным",
@@ -472,7 +473,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 SettingsToggle(
                     title = "Заставка (Скринсейвер)",
-                    subtitle = "Яркие Cyber HUD часы при отсутствии касаний",
+                    subtitle = "Cyber HUD часы при отсутствии касаний",
                     checked = screensaverEnabled,
                     onCheckedChange = { screensaverEnabled = it }
                 )
@@ -501,6 +502,40 @@ fun SettingsScreen(
                     checked = oledProtection,
                     onCheckedChange = { oledProtection = it }
                 )
+
+                Spacer(modifier = Modifier.height(14.dp))
+                // Автопробуждение по заказу
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D2030)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Автопробуждение экрана при заказе", color = NeonGreen, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Text(
+                            "Экран зажигается автоматически при любом звуке заказа на сайте или звуковом сигнале приложения.",
+                            color = TextWhite,
+                            fontSize = 11.sp
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Откройте настройки уведомлений Android", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Доступ к push-уведомлениям (для сторонних приложений)", fontSize = 11.sp, color = NeonCyan)
+                        }
+                    }
+                }
             }
 
             // Веб и сеть

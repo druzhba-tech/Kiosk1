@@ -1,4 +1,4 @@
-﻿name: Build Android APK
+name: Build Android APK
 
 on:
   push:
@@ -43,14 +43,14 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.1
-          name: Kiosk Browser v1.0.1
+          tag_name: v1.0.2
+          name: Kiosk Browser v1.0.2
           body: |
-            Автоматическая сборка Kiosk Browser.
-            - Компактный горизонтальный статус-бар в правом углу (отступ 2 см)
-            - Поддержка свайпа сверху вниз (Pull-to-refresh)
-            - Авто-пробуждение экрана при заказе
-            - Модуль автообновления приложения по воздуху (OTA)
+            Автоматическая сборка Kiosk Browser v1.0.2:
+            - Автоматическое пробуждение экрана при заказе на сайте (HTML5 Audio, Web Audio, Notifications)
+            - Автоматическое пробуждение экрана при звуковом сигнале или Push-уведомлении в сторонних приложениях
+            - Аппаратное зажигание дисплея (ACQUIRE_CAUSES_WAKEUP)
+            - Информационная панель (HUD) и выбор режима при первом запуске
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

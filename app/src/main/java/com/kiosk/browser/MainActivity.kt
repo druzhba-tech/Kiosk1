@@ -38,6 +38,7 @@ import com.kiosk.browser.core.nfc.KioskNfcManager
 import com.kiosk.browser.core.power.BatteryTracker
 import com.kiosk.browser.core.power.IdleWatchdog
 import com.kiosk.browser.core.power.PowerManagerHelper
+import com.kiosk.browser.core.power.AudioOrderDetector
 import com.kiosk.browser.core.security.SecretGestureDetector
 import com.kiosk.browser.core.sensors.MotionSensorTracker
 import com.kiosk.browser.service.KioskForegroundService
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
     lateinit var idleWatchdog: IdleWatchdog
     lateinit var nfcManager: KioskNfcManager
     lateinit var secretGestureDetector: SecretGestureDetector
+    lateinit var audioOrderDetector: AudioOrderDetector
 
     var currentWebView: WebView? = null
 
@@ -81,6 +83,12 @@ class MainActivity : ComponentActivity() {
             triggerAntiTheftAlarm()
         }
         motionTracker.start()
+
+        // Детектор звуковых сигналов нового заказа (для сайта и сторонних приложений)
+        audioOrderDetector = AudioOrderDetector(this) {
+            wakeUpFromScreensaver()
+        }
+        audioOrderDetector.start()
 
         idleWatchdog = IdleWatchdog(
             onIdleTimeout = {
@@ -356,17 +364,7 @@ class MainActivity : ComponentActivity() {
     fun wakeUpFromScreensaver() {
         runOnUiThread {
             _isScreensaverActive.value = false
-            powerHelper.setVirtualSleepBrightness(this, false)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                setShowWhenLocked(true)
-                setTurnScreenOn(true)
-            } else {
-                @Suppress("DEPRECATION")
-                window.addFlags(
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                )
-            }
+            powerHelper.wakeUpScreenInstantly(this)
             idleWatchdog.resetTimer()
         }
     }
@@ -427,6 +425,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         currentInstance = null
+        audioOrderDetector.stop()
         batteryTracker.stop()
         motionTracker.stop()
         idleWatchdog.stop()

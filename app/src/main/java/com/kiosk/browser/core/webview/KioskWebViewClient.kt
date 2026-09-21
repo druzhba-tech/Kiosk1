@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.core.webview
+package com.kiosk.browser.core.webview
 
 import android.graphics.Bitmap
 import android.net.http.SslError
@@ -87,20 +87,43 @@ class KioskWebViewClient(
                 }
 
                 // 1. Перехват вызова HTML5 Audio (.play())
-                var origPlay = HTMLMediaElement.prototype.play;
-                HTMLMediaElement.prototype.play = function() {
-                    wakeKiosk();
-                    return origPlay.apply(this, arguments);
-                };
+                if (window.HTMLMediaElement && HTMLMediaElement.prototype.play) {
+                    var origPlay = HTMLMediaElement.prototype.play;
+                    HTMLMediaElement.prototype.play = function() {
+                        wakeKiosk();
+                        return origPlay.apply(this, arguments);
+                    };
+                }
+                if (window.HTMLAudioElement && HTMLAudioElement.prototype.play) {
+                    var origAudioPlay = HTMLAudioElement.prototype.play;
+                    HTMLAudioElement.prototype.play = function() {
+                        wakeKiosk();
+                        return origAudioPlay.apply(this, arguments);
+                    };
+                }
 
                 // 2. Перехват AudioContext (Web Audio API)
                 if (window.AudioContext || window.webkitAudioContext) {
                     var AudioCtx = window.AudioContext || window.webkitAudioContext;
-                    var origResume = AudioCtx.prototype.resume;
-                    AudioCtx.prototype.resume = function() {
-                        wakeKiosk();
-                        return origResume.apply(this, arguments);
-                    };
+                    if (AudioCtx.prototype.resume) {
+                        var origResume = AudioCtx.prototype.resume;
+                        AudioCtx.prototype.resume = function() {
+                            wakeKiosk();
+                            return origResume.apply(this, arguments);
+                        };
+                    }
+                    if (AudioCtx.prototype.createBufferSource) {
+                        var origCreateBufferSource = AudioCtx.prototype.createBufferSource;
+                        AudioCtx.prototype.createBufferSource = function() {
+                            var source = origCreateBufferSource.apply(this, arguments);
+                            var origStart = source.start;
+                            source.start = function() {
+                                wakeKiosk();
+                                return origStart.apply(this, arguments);
+                            };
+                            return source;
+                        };
+                    }
                 }
 
                 // 3. Перехват Web Notifications (new Notification)
@@ -114,6 +137,15 @@ class KioskWebViewClient(
                     window.Notification.requestPermission = function(cb) {
                         if (cb) cb("granted");
                         return Promise.resolve("granted");
+                    };
+                }
+
+                // 4. Перехват голосового синтезатора (SpeechSynthesis)
+                if (window.speechSynthesis && window.speechSynthesis.speak) {
+                    var origSpeak = window.speechSynthesis.speak;
+                    window.speechSynthesis.speak = function(utterance) {
+                        wakeKiosk();
+                        return origSpeak.apply(this, arguments);
                     };
                 }
             })();

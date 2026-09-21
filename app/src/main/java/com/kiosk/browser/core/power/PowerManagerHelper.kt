@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.core.power
+package com.kiosk.browser.core.power
 
 import android.app.Activity
 import android.content.Context
@@ -73,6 +73,42 @@ class PowerManagerHelper(private val context: Context) {
             val layoutParams = activity.window.attributes
             layoutParams.screenBrightness = if (sleep) 0.005f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             activity.window.attributes = layoutParams
+        }
+    }
+
+    /**
+     * Аппаратное пробуждение дисплея (зажигание экрана) при поступлении заказа
+     */
+    fun wakeUpScreenInstantly(activity: Activity) {
+        try {
+            @Suppress("DEPRECATION")
+            val screenWakeLock = powerManager.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                PowerManager.ON_AFTER_RELEASE,
+                "kiosk:OrderInstantWake"
+            )
+            screenWakeLock.acquire(3000L)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        activity.runOnUiThread {
+            val layoutParams = activity.window.attributes
+            layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            activity.window.attributes = layoutParams
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                activity.setShowWhenLocked(true)
+                activity.setTurnScreenOn(true)
+            } else {
+                @Suppress("DEPRECATION")
+                activity.window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
         }
     }
 }

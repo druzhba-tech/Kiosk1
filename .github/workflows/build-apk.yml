@@ -43,14 +43,15 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.3
-          name: Kiosk Browser v1.0.3
+          tag_name: v1.0.4
+          name: Kiosk Browser v1.0.4
           body: |
-            Автоматическая сборка Kiosk Browser v1.0.3:
+            Автоматическая сборка Kiosk Browser v1.0.4:
+            - Исправлено открытие списка Wi-Fi сетей в режиме блокировки киоска
+            - Поддержка системного оверлея Settings.Panel.ACTION_WIFI на Android 10+
+            - Удалена служба чтения уведомлений для полного устранения предупреждений Google Play Protect
             - Заметное пульсирующее уведомление об обновлении в статусной панели (HUD)
-            - Автоматическое пробуждение экрана при заказе (Web и App)
-            - Периодическая проверка обновлений каждые 3 минуты в фоне
-            - Исправлен репозиторий обновлений на druzhba-tech/Kiosk1
+            - Автоматическое пробуждение экрана при заказе по звуку
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -272,24 +272,24 @@ fun KioskStatusBar(
                     .background(if (isExpanded) CyberSurface.copy(alpha = 0.6f) else Color.Transparent)
                     .clickable {
                         notifyInteraction()
-                        try {
-                            val targetIntent = if (isWifiConnected) {
-                                Intent(Settings.ACTION_WIFI_SETTINGS)
-                            } else if (isCellularConnected) {
-                                Intent(Settings.ACTION_DATA_ROAMING_SETTINGS)
-                            } else {
-                                Intent(Settings.ACTION_WIRELESS_SETTINGS)
-                            }
-                            targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(targetIntent)
-                        } catch (e: Exception) {
+                        val mainAct = (context as? MainActivity) ?: MainActivity.currentInstance
+                        if (mainAct != null) {
+                            mainAct.openWifiSettings()
+                        } else {
                             try {
-                                val fallbackIntent = Intent(Settings.ACTION_SETTINGS).apply {
+                                val intent = Intent(Settings.ACTION_WIFI_SETTINGS).apply {
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
-                                context.startActivity(fallbackIntent)
-                            } catch (ex: Exception) {
-                                ex.printStackTrace()
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                try {
+                                    val fallback = Intent(Settings.ACTION_SETTINGS).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(fallback)
+                                } catch (ex: Exception) {
+                                    ex.printStackTrace()
+                                }
                             }
                         }
                     }

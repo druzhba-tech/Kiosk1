@@ -354,6 +354,61 @@ class MainActivity : ComponentActivity() {
         configRepository.updateConfig { it.copy(isKioskEnabled = false) }
     }
 
+    /**
+     * Открытие системного окна / панели выбора сетей Wi-Fi
+     */
+    fun openWifiSettings() {
+        runOnUiThread {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        val panelIntent = Intent(android.provider.Settings.Panel.ACTION_WIFI).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(panelIntent)
+                        return@runOnUiThread
+                    } catch (_: Exception) {}
+
+                    try {
+                        val internetPanelIntent = Intent(android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(internetPanelIntent)
+                        return@runOnUiThread
+                    } catch (_: Exception) {}
+                }
+
+                try {
+                    stopLockTask()
+                } catch (_: Exception) {}
+
+                val wifiIntent = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(wifiIntent)
+            } catch (e: Exception) {
+                try {
+                    val fallback = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(fallback)
+                } catch (ex: Exception) {
+                    ex.printStackTrace()
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val config = configRepository.getConfig()
+        if (config.isKioskEnabled) {
+            try {
+                startLockTask()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun controlScreen(turnOn: Boolean) {
         runOnUiThread {
             if (turnOn) {

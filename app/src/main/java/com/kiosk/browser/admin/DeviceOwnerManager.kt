@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.admin
+package com.kiosk.browser.admin
 
 import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
@@ -42,7 +42,15 @@ class DeviceOwnerManager(private val context: Context) {
         if (!isDeviceOwner) return
 
         try {
-            dpm.setLockTaskPackages(adminComponent, arrayOf(context.packageName))
+            dpm.setLockTaskPackages(
+                adminComponent,
+                arrayOf(
+                    context.packageName,
+                    "com.android.settings",
+                    "com.google.android.settings",
+                    "com.android.settings.intelligence"
+                )
+            )
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 if (blockSafeMode) {

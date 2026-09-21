@@ -29,6 +29,27 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      - name: Ensure Permanent Keystore Exists
+        run: |
+          if [ ! -f app/kiosk.keystore ]; then
+            echo "Generating permanent signing keystore..."
+            keytool -genkeypair -v \
+              -keystore app/kiosk.keystore \
+              -alias kiosk \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass kioskpassword \
+              -keypass kioskpassword \
+              -dname "CN=Kiosk Browser, O=Kiosk, C=RU"
+            
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add app/kiosk.keystore
+            git commit -m "chore: commit permanent signing keystore for updates" || true
+            git push origin main || true
+          fi
+
       - name: Build Debug APK with Gradle Wrapper
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 

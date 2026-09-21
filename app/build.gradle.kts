@@ -12,8 +12,8 @@ android {
         applicationId = "com.kiosk.browser"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.0.10"
+        versionCode = 12
+        versionName = "1.0.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -29,9 +29,31 @@ android {
         }
     }
 
+    signingConfigs {
+        create("permanent") {
+            val keystoreFile = file("kiosk.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = "kioskpassword"
+                keyAlias = "kiosk"
+                keyPassword = "kioskpassword"
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            val keystoreFile = file("kiosk.keystore")
+            if (keystoreFile.exists()) {
+                signingConfig = signingConfigs.getByName("permanent")
+            }
+        }
         release {
             isMinifyEnabled = false
+            val keystoreFile = file("kiosk.keystore")
+            if (keystoreFile.exists()) {
+                signingConfig = signingConfigs.getByName("permanent")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

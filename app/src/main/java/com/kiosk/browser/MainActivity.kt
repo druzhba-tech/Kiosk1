@@ -233,7 +233,13 @@ class MainActivity : ComponentActivity() {
                     }
 
                     var showLauncherPrompt by remember {
-                        mutableStateOf(!deviceOwnerManager.isDefaultLauncher())
+                        mutableStateOf(!deviceOwnerManager.isDefaultLauncher() && !deviceOwnerManager.isDeviceOwner)
+                    }
+
+                    LaunchedEffect(Unit) {
+                        if (deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
+                            deviceOwnerManager.setDefaultLauncher(true)
+                        }
                     }
 
                     if (showLauncherPrompt) {
@@ -421,6 +427,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
+            deviceOwnerManager.setDefaultLauncher(true)
+        }
         val config = configRepository.getConfig()
         if (config.isKioskEnabled) {
             try {

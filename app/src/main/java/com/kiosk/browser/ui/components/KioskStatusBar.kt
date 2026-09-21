@@ -401,19 +401,13 @@ fun KioskStatusBar(
             }
         }
 
-        // 5. Заметный индикатор обновления в панели (OTA)
+        // 5. Заметный индикатор обновления в панели (OTA) - только иконка
         if (hasUpdate) {
             val badgeColor = when {
                 isInstallingUpdate     -> NeonOrange
                 isReadyToInstall       -> NeonGreen
                 updateProgress != null -> NeonCyan
                 else                   -> NeonCyan
-            }
-            val badgeText = when {
-                isInstallingUpdate     -> "УСТАНОВКА..."
-                isReadyToInstall       -> "УСТАНОВИТЬ v$updateVersion"
-                updateProgress != null -> "СКАЧИВАНИЕ $updateProgress%"
-                else                   -> "ОБНОВЛЕНИЕ v$updateVersion"
             }
             val badgeIcon = when {
                 isInstallingUpdate     -> Icons.Default.CloudDownload
@@ -422,36 +416,23 @@ fun KioskStatusBar(
                 else                   -> Icons.Default.SystemUpdate
             }
 
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = badgeColor.copy(alpha = 0.2f + updateGlowAlpha * 0.25f),
-                border = BorderStroke(1.5.dp, badgeColor.copy(alpha = updateGlowAlpha)),
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(badgeColor.copy(alpha = 0.2f + updateGlowAlpha * 0.25f))
+                    .border(BorderStroke(1.dp, badgeColor.copy(alpha = updateGlowAlpha)), RoundedCornerShape(6.dp))
                     .clickable {
                         notifyInteraction()
                         onUpdateClick?.invoke()
                     }
+                    .padding(itemPadding)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = badgeIcon,
-                        contentDescription = "Update Status",
-                        tint = badgeColor,
-                        modifier = Modifier.size(if (isExpanded) 18.dp else 14.dp)
-                    )
-                    Text(
-                        text = badgeText,
-                        color = badgeColor,
-                        fontSize = if (isExpanded) 11.sp else 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+                Icon(
+                    imageVector = badgeIcon,
+                    contentDescription = "Update",
+                    tint = badgeColor,
+                    modifier = Modifier.size(iconSize)
+                )
             }
         }
 

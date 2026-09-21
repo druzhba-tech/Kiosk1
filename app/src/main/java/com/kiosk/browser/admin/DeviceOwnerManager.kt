@@ -191,28 +191,48 @@ class DeviceOwnerManager(private val context: Context) {
     }
 
     fun requestDefaultLauncher(activity: android.app.Activity) {
+        if (isDeviceOwner) {
+            setDefaultLauncher(true)
+            android.widget.Toast.makeText(activity, "Kiosk установлен главным лаунчером", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            activity.stopLockTask()
+        } catch (_: Exception) {}
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = activity.getSystemService(android.app.role.RoleManager::class.java)
             if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
                 if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
                     val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
-                    activity.startActivity(intent)
-                    return
+                    try {
+                        @Suppress("DEPRECATION")
+                        activity.startActivityForResult(intent, 1001)
+                        return
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
         }
 
-        try {
-            val intent = android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS)
-            activity.startActivity(intent)
-        } catch (e: Exception) {
+        val intents = listOf(
+            android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS),
+            android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+            android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                addCategory(android.content.Intent.CATEGORY_HOME)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+            android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+        )
+
+        for (intent in intents) {
             try {
-                val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 activity.startActivity(intent)
-            } catch (e2: Exception) {
-                val intent = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
-                activity.startActivity(intent)
-            }
+                return
+            } catch (_: Exception) {}
         }
     }
 

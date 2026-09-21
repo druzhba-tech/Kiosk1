@@ -7,12 +7,15 @@ import android.webkit.JavascriptInterface
 import android.widget.Toast
 import com.kiosk.browser.MainActivity
 import com.kiosk.browser.core.power.BatteryTracker
+import com.kiosk.browser.core.security.PasswordManager
 import java.util.Locale
 
 class JavaScriptBridge(
     private val context: Context,
     private val batteryTracker: BatteryTracker,
-    private val onScreenControl: (turnOn: Boolean) -> Unit
+    val passwordManager: PasswordManager = PasswordManager(context),
+    private val onScreenControl: (turnOn: Boolean) -> Unit,
+    private val onSavePasswordPrompt: ((domain: String, username: String, password: String) -> Unit)? = null
 ) {
 
     private var tts: TextToSpeech? = null
@@ -72,6 +75,32 @@ class JavaScriptBridge(
     @JavascriptInterface
     fun reload() {
         MainActivity.currentInstance?.reloadCurrentPage()
+    }
+
+    @JavascriptInterface
+    fun getSavedLogin(url: String): String {
+        return passwordManager.getCredentials(url)?.username ?: ""
+    }
+
+    @JavascriptInterface
+    fun getSavedPassword(url: String): String {
+        return passwordManager.getCredentials(url)?.password ?: ""
+    }
+
+    @JavascriptInterface
+    fun onFormSubmit(url: String, username: String, password: String) {
+        if (password.isBlank()) return
+        val domain = passwordManager.extractDomain(url)
+        val existing = passwordManager.getCredentials(domain)
+        if (existing != null && existing.username == username.trim() && existing.password == password) {
+            return
+        }
+        onSavePasswordPrompt?.invoke(domain, username.trim(), password)
+    }
+
+    @JavascriptInterface
+    fun saveCredentialsDirectly(url: String, username: String, password: String) {
+        passwordManager.saveCredentials(url, username, password)
     }
 
     fun destroy() {

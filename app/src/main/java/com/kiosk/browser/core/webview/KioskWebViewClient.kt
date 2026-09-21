@@ -66,6 +66,90 @@ class KioskWebViewClient(
         injectOrderAlertWakeHook(view)
         // Блокируем выделение текста и контекстное меню на веб-страницах
         injectTextSelectionBlock(view)
+        // Автозаполнение сохраненных логинов/паролей и перехват отправки форм
+        injectPasswordAutofillAndCapture(view)
+    }
+
+    /**
+     * Автозаполнение паролей и перехват формы авторизации
+     */
+    private fun injectPasswordAutofillAndCapture(view: WebView?) {
+        val script = """
+            (function() {
+                try {
+                    var url = window.location.href;
+                    var savedLogin = (window.kiosk && window.kiosk.getSavedLogin) ? window.kiosk.getSavedLogin(url) : "";
+                    var savedPass = (window.kiosk && window.kiosk.getSavedPassword) ? window.kiosk.getSavedPassword(url) : "";
+
+                    function autofill() {
+                        if (!savedLogin && !savedPass) return;
+                        var passInputs = document.querySelectorAll('input[type="password"]');
+                        passInputs.forEach(function(passInput) {
+                            if (savedPass && !passInput.value) {
+                                passInput.value = savedPass;
+                                passInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                passInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            var form = passInput.form || passInput.closest('form');
+                            var userInput = null;
+                            if (form) {
+                                userInput = form.querySelector('input[type="text"], input[type="email"], input[type="tel"], input[name*="user"], input[name*="login"], input[name*="email"]');
+                            }
+                            if (!userInput) {
+                                var all = Array.from(document.querySelectorAll('input'));
+                                var idx = all.indexOf(passInput);
+                                if (idx > 0) userInput = all[idx - 1];
+                            }
+                            if (userInput && savedLogin && !userInput.value) {
+                                userInput.value = savedLogin;
+                                userInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                userInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        });
+                    }
+
+                    autofill();
+                    setTimeout(autofill, 500);
+                    setTimeout(autofill, 1500);
+
+                    function captureCredentials() {
+                        var passInputs = document.querySelectorAll('input[type="password"]');
+                        passInputs.forEach(function(passInput) {
+                            var password = passInput.value;
+                            if (!password) return;
+                            var form = passInput.form || passInput.closest('form');
+                            var username = "";
+                            if (form) {
+                                var userInput = form.querySelector('input[type="text"], input[type="email"], input[type="tel"], input[name*="user"], input[name*="login"], input[name*="email"]');
+                                if (userInput) username = userInput.value;
+                            }
+                            if (!username) {
+                                var all = Array.from(document.querySelectorAll('input'));
+                                var idx = all.indexOf(passInput);
+                                if (idx > 0) username = all[idx - 1].value;
+                            }
+                            if (password && window.kiosk && window.kiosk.onFormSubmit) {
+                                window.kiosk.onFormSubmit(window.location.href, username, password);
+                            }
+                        });
+                    }
+
+                    if (!window.__kioskPassHooksInjected) {
+                        window.__kioskPassHooksInjected = true;
+                        document.addEventListener('submit', function(e) {
+                            captureCredentials();
+                        }, true);
+                        document.addEventListener('click', function(e) {
+                            var target = e.target;
+                            if (target && target.closest('button, input[type="submit"], [role="button"], a[class*="btn"], a[class*="login"], div[class*="submit"]')) {
+                                setTimeout(captureCredentials, 100);
+                            }
+                        }, true);
+                    }
+                } catch(e) {}
+            })();
+        """.trimIndent()
+        view?.evaluateJavascript(script, null)
     }
 
     /**

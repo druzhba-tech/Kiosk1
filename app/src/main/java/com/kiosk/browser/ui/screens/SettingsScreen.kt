@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiosk.browser.MainActivity
+import com.kiosk.browser.core.security.PasswordManager
 import com.kiosk.browser.core.update.UpdateState
 import com.kiosk.browser.data.model.KioskConfig
 import com.kiosk.browser.ui.components.AppPickerDialog
@@ -720,6 +721,84 @@ fun SettingsScreen(
                     checked = blockKeys,
                     onCheckedChange = { blockKeys = it }
                 )
+            }
+
+            // Сохраненные пароли веб-сайтов
+            val passwordManager = remember { PasswordManager(context) }
+            var savedCredentials by remember { mutableStateOf(passwordManager.getAllCredentials()) }
+
+            SettingsCard(title = "Сохраненные пароли веб-сайтов", icon = Icons.Default.Lock) {
+                if (savedCredentials.isEmpty()) {
+                    Text(
+                        text = "Нет сохраненных паролей. Браузер автоматически предложит сохранить пароль при входе на сайт.",
+                        color = TextMuted,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        savedCredentials.forEach { cred ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CyberSurface)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = cred.domain,
+                                        color = NeonCyan,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    if (cred.username.isNotBlank()) {
+                                        Text(
+                                            text = "Логин: ${cred.username}",
+                                            color = TextWhite,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = "Пароль: ••••••••",
+                                        color = TextMuted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        passwordManager.deleteCredentials(cred.domain)
+                                        savedCredentials = passwordManager.getAllCredentials()
+                                        Toast.makeText(context, "Пароль для ${cred.domain} удален", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Удалить",
+                                        tint = NeonRed,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = {
+                                passwordManager.clearAll()
+                                savedCredentials = emptyList()
+                                Toast.makeText(context, "Все пароли очищены", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonRed),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Очистить все сохраненные пароли")
+                        }
+                    }
+                }
             }
 
             // Резервная копия

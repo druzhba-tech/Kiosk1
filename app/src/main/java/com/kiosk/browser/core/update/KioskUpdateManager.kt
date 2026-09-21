@@ -41,6 +41,27 @@ class KioskUpdateManager(private val context: Context) {
     private var isDownloading = false
 
     /**
+     * Получить файл APK в кэше для конкретной версии
+     */
+    fun getApkFile(versionName: String): File {
+        return File(context.cacheDir, "kiosk-update-v$versionName.apk")
+    }
+
+    /**
+     * Удалить старые закэшированные версии APK
+     */
+    private fun cleanOldApkCache(keepVersionTag: String) {
+        try {
+            val keepName = "kiosk-update-v$keepVersionTag.apk"
+            context.cacheDir.listFiles()?.forEach { file ->
+                if (file.name.startsWith("kiosk-update") && file.name.endsWith(".apk") && file.name != keepName) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
      * Проверка наличия новой версии через GitHub Releases API (в фоне)
      */
     suspend fun checkForUpdates(currentVersionName: String): UpdateState = withContext(Dispatchers.IO) {
@@ -66,26 +87,39 @@ class KioskUpdateManager(private val context: Context) {
                 val assets = json.optJSONArray("assets")
 
                 var apkDownloadUrl = ""
+                var apkSize = 0L
                 if (assets != null) {
                     for (i in 0 until assets.length()) {
                         val asset = assets.getJSONObject(i)
                         val name = asset.optString("name", "")
                         if (name.endsWith(".apk")) {
                             apkDownloadUrl = asset.optString("browser_download_url", "")
+                            apkSize = asset.optLong("size", 0L)
                             break
                         }
                     }
                 }
 
-                android.util.Log.i("KioskUpdateManager", "Найдена версия на GitHub: $latestTag, URL: $apkDownloadUrl")
+                android.util.Log.i("KioskUpdateManager", "Найдена версия на GitHub: $latestTag, URL: $apkDownloadUrl, размер: $apkSize байт")
 
                 if (apkDownloadUrl.isNotEmpty() && isNewerVersion(latestTag, currentVersionName)) {
-                    android.util.Log.i("KioskUpdateManager", "Обновление $latestTag доступно! Запуск фонового скачивания...")
+                    val cachedApk = getApkFile(latestTag)
+                    // Если обновление уже полностью скачано в кэш — не скачиваем повторно!
+                    if (cachedApk.exists() && cachedApk.length() > 0 && (apkSize <= 0L || cachedApk.length() == apkSize)) {
+                        android.util.Log.i("KioskUpdateManager", "Обновление v$latestTag уже в кэше (${cachedApk.length()} байт). Готово к установке без повторной загрузки!")
+                        val ready = UpdateState.ReadyToInstall(cachedApk, latestTag)
+                        _updateState.value = ready
+                        return@withContext ready
+                    }
+
+                    cleanOldApkCache(latestTag)
+
+                    android.util.Log.i("KioskUpdateManager", "Обновление $latestTag доступно. Запуск фоновой докачки...")
                     val available = UpdateState.Available(latestTag, apkDownloadUrl, releaseNotes)
                     _updateState.value = available
 
-                    // Сразу запускаем скачивание в фоне, не блокируя работу пользователя в киоске
-                    startBackgroundDownload(apkDownloadUrl, latestTag)
+                    // Сразу запускаем скачивание/докачку в фоне, не блокируя работу пользователя в киоске
+                    startBackgroundDownload(apkDownloadUrl, latestTag, apkSize)
                     return@withContext available
                 } else {
                     android.util.Log.i("KioskUpdateManager", "Текущая версия актуальна ($currentVersionName >= $latestTag)")
@@ -121,40 +155,67 @@ class KioskUpdateManager(private val context: Context) {
     }
 
     /**
-     * Фоновая загрузка APK файла без блокировки киоска
+     * Фоновая загрузка/докачка APK файла с поддержкой HTTP Range без блокировки киоска
      */
-    fun startBackgroundDownload(downloadUrl: String, versionName: String) {
+    fun startBackgroundDownload(downloadUrl: String, versionName: String, expectedSize: Long = 0L) {
         if (isDownloading) return
         scope.launch {
             isDownloading = true
             try {
-                val updateFile = File(context.cacheDir, "kiosk-update.apk")
-                if (updateFile.exists()) updateFile.delete()
+                val updateFile = getApkFile(versionName)
+                val existingBytes = if (updateFile.exists()) updateFile.length() else 0L
+
+                // Если уже полностью скачан
+                if (expectedSize > 0 && existingBytes == expectedSize) {
+                    android.util.Log.i("KioskUpdateManager", "Файл v$versionName уже полностью загружен ($existingBytes байт).")
+                    _updateState.value = UpdateState.ReadyToInstall(updateFile, versionName)
+                    return@launch
+                }
 
                 val conn = URL(downloadUrl).openConnection() as HttpURLConnection
                 conn.setRequestProperty("User-Agent", "Kiosk-App-Updater")
                 conn.instanceFollowRedirects = true
                 conn.connectTimeout = 15000
                 conn.readTimeout = 30000
+
+                // Докачка (HTTP Range) если есть частично скачанный файл
+                val resume = existingBytes > 0 && (expectedSize <= 0 || existingBytes < expectedSize)
+                if (resume) {
+                    conn.setRequestProperty("Range", "bytes=$existingBytes-")
+                    android.util.Log.i("KioskUpdateManager", "Возобновление докачки v$versionName с байта $existingBytes...")
+                }
                 conn.connect()
 
-                val fileLength = conn.contentLengthLong
+                val responseCode = conn.responseCode
+                val append = resume && responseCode == HttpURLConnection.HTTP_PARTIAL
+
+                val totalLength = if (append) {
+                    existingBytes + conn.contentLengthLong
+                } else {
+                    conn.contentLengthLong
+                }
+
+                val startOffset = if (append) existingBytes else 0L
+                if (!append && updateFile.exists()) {
+                    updateFile.delete()
+                }
+
                 var lastReportedPercent = -1
 
                 conn.inputStream.use { input ->
-                    FileOutputStream(updateFile).use { output ->
+                    FileOutputStream(updateFile, append).use { output ->
                         val data = ByteArray(8192)
-                        var total: Long = 0
+                        var currentTotal = startOffset
                         var count: Int
                         while (input.read(data).also { count = it } != -1) {
-                            total += count
+                            currentTotal += count
                             output.write(data, 0, count)
-                            if (fileLength > 0) {
-                                val percent = ((total * 100) / fileLength).toInt()
-                                // Обновляем UI с шагом 2% для экономии ресурсов
+                            val targetTotal = if (expectedSize > 0) expectedSize else totalLength
+                            if (targetTotal > 0) {
+                                val percent = ((currentTotal * 100) / targetTotal).toInt().coerceIn(0, 100)
                                 if (percent != lastReportedPercent && (percent % 2 == 0 || percent == 100)) {
                                     lastReportedPercent = percent
-                                    _updateState.value = UpdateState.Downloading(percent, total, fileLength, versionName)
+                                    _updateState.value = UpdateState.Downloading(percent, currentTotal, targetTotal, versionName)
                                 }
                             }
                         }
@@ -162,7 +223,7 @@ class KioskUpdateManager(private val context: Context) {
                 }
 
                 if (updateFile.exists() && updateFile.length() > 0) {
-                    android.util.Log.i("KioskUpdateManager", "Обновление v$versionName успешно скачано! Готово к установке.")
+                    android.util.Log.i("KioskUpdateManager", "Обновление v$versionName готово (${updateFile.length()} байт)!")
                     _updateState.value = UpdateState.ReadyToInstall(updateFile, versionName)
                 } else {
                     _updateState.value = UpdateState.Error("Файл обновления пуст")

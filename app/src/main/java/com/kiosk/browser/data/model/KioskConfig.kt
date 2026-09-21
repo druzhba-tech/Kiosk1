@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class KioskConfig(
     // Стартовый веб-сайт и основной режим
-    val startUrl: String = "https://demo.home-assistant.io",
+    val startUrl: String = "",
     val primaryMode: String = "WEB", // "WEB" (Веб-сайт) или "APP" (Android-приложение)
     val primaryAppPackage: String = "", // Пакет приложения по умолчанию (например com.example.app)
     val isFirstLaunchCompleted: Boolean = false, // Завершена ли первоначальная настройка

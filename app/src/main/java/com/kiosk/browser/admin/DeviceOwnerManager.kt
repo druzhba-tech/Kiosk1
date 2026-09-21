@@ -37,22 +37,26 @@ class DeviceOwnerManager(private val context: Context) {
     fun applyKioskPolicies(
         blockSafeMode: Boolean,
         blockUsb: Boolean,
-        disableStatusBar: Boolean
+        disableStatusBar: Boolean,
+        whitelistedPackages: List<String> = emptyList()
     ) {
         if (!isDeviceOwner) return
 
         try {
-            dpm.setLockTaskPackages(
-                adminComponent,
-                arrayOf(
-                    context.packageName,
-                    "com.android.settings",
-                    "com.google.android.settings",
-                    "com.android.settings.intelligence",
-                    "com.android.packageinstaller",
-                    "com.google.android.packageinstaller"
-                )
+            val defaultWhitelist = listOf(
+                context.packageName,
+                "com.android.settings",
+                "com.google.android.settings",
+                "com.android.settings.intelligence",
+                "com.android.packageinstaller",
+                "com.google.android.packageinstaller"
             )
+            val allPackages = (defaultWhitelist + whitelistedPackages)
+                .filter { it.isNotBlank() }
+                .distinct()
+                .toTypedArray()
+
+            dpm.setLockTaskPackages(adminComponent, allPackages)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 if (blockSafeMode) {
@@ -83,8 +87,8 @@ class DeviceOwnerManager(private val context: Context) {
                 )
             }
 
-            // Автоматически включаем жесткие ограничения для сторонних приложений
-            enforceStrictBackgroundRestrictions(listOf(context.packageName))
+            // Автоматически включаем ограничения для сторонних приложений (кроме разрешенных)
+            enforceStrictBackgroundRestrictions(listOf(context.packageName) + whitelistedPackages)
         } catch (e: Exception) {
             e.printStackTrace()
         }

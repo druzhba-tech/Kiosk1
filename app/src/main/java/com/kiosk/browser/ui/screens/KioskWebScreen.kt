@@ -119,10 +119,21 @@ fun KioskWebScreen(
                 webView.addJavascriptInterface(jsBridge, "kiosk")
                 webView.addJavascriptInterface(jsBridge, "fully")
 
-                webView.loadUrl(config.startUrl)
+                if (config.startUrl.isNotBlank()) {
+                    webView.loadUrl(config.startUrl)
+                }
                 mainActivity.currentWebView = webView
 
                 swipeRefresh
+            },
+            update = { swipeRefresh ->
+                val webView = swipeRefresh.getChildAt(0) as? WebView
+                if (webView != null && config.startUrl.isNotBlank()) {
+                    val current = webView.url ?: ""
+                    if (current != config.startUrl && !current.startsWith(config.startUrl.trimEnd('/'))) {
+                        webView.loadUrl(config.startUrl)
+                    }
+                }
             },
             modifier = Modifier.fillMaxSize()
         )

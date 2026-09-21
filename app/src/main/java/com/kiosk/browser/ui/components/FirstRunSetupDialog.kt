@@ -320,7 +320,19 @@ fun FirstRunSetupDialog(
                 // ── Кнопка «Запустить Киоск» ─────────────────────────────────
                 Button(
                     onClick = {
-                        val finalUrl = if (urlText.isNotBlank()) urlText.trim() else "https://demo.home-assistant.io"
+                        if (selectedMode == "APP" && selectedPackage.isBlank()) {
+                            showAppPicker = true
+                            android.widget.Toast.makeText(context, "Пожалуйста, выберите приложение из списка", android.widget.Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        var finalUrl = urlText.trim()
+                        if (selectedMode == "WEB") {
+                            if (finalUrl.isBlank()) {
+                                finalUrl = "https://google.com"
+                            } else if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
+                                finalUrl = "https://$finalUrl"
+                            }
+                        }
                         val finalPin = if (pinText.isNotBlank()) pinText.trim() else "1234"
                         onComplete(selectedMode, finalUrl, selectedPackage, finalPin)
                     },

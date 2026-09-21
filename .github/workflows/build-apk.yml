@@ -43,14 +43,14 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.6
-          name: Kiosk Browser v1.0.6
+          tag_name: v1.0.7
+          name: Kiosk Browser v1.0.7
           body: |
-            Обновление Kiosk Browser v1.0.6:
-            - Убраны лишние надписи с панели: оставлена только чистая иконка обновления
-            - Исправлен запрос назначения лаунчера по умолчанию (вызов системного диалога / автоустановка для Device Owner)
-            - Разделены intent-filter для правильного перехвата кнопки HOME
-            - Фоновое скачивание и установка в один клик
+            Обновление Kiosk Browser v1.0.7:
+            - Устранена автозагрузка Home Assistant: киоск открывает только выбранный сайт или приложение
+            - Исправлен мастер первоначальной настройки: фон не загружает сторонний сайт в процессе выбора
+            - Добавлен реактивный перезапуск WebView при смене URL
+            - Полная поддержка запуска и фиксации сторонних приложений в режиме APP (белый список LockTask)
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

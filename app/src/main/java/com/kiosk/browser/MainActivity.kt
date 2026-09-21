@@ -164,7 +164,32 @@ class MainActivity : ComponentActivity() {
                 openSettingsCallback = { showPinDialog = true }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (config.primaryMode == "APP" && config.primaryAppPackage.isNotEmpty()) {
+                    if (!config.isFirstLaunchCompleted) {
+                        // Чистый фон при первоначальной настройке — никакой Home Assistant не запускается в фоне!
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(CyberBlack)
+                        )
+                        FirstRunSetupDialog(
+                            initialUrl = config.startUrl,
+                            initialPin = config.pinCode,
+                            onComplete = { mode, url, appPackage, pin ->
+                                configRepository.updateConfig {
+                                    it.copy(
+                                        primaryMode = mode,
+                                        startUrl = url,
+                                        primaryAppPackage = appPackage,
+                                        pinCode = pin,
+                                        isFirstLaunchCompleted = true,
+                                        allowedApps = if (appPackage.isNotEmpty() && !it.allowedApps.contains(appPackage))
+                                            it.allowedApps + appPackage else it.allowedApps
+                                    )
+                                }
+                                applyConfigUpdates()
+                            }
+                        )
+                    } else if (config.primaryMode == "APP" && config.primaryAppPackage.isNotEmpty()) {
                         PrimaryAppKioskScreen(
                             packageName = config.primaryAppPackage,
                             mainActivity = this@MainActivity,
@@ -207,28 +232,6 @@ class MainActivity : ComponentActivity() {
                         SettingsScreen(
                             mainActivity = this@MainActivity,
                             onClose = { showSettings = false }
-                        )
-                    }
-
-                    // ── Мастер первоначальной настройки при первом запуске ──
-                    if (!config.isFirstLaunchCompleted) {
-                        FirstRunSetupDialog(
-                            initialUrl = config.startUrl,
-                            initialPin = config.pinCode,
-                            onComplete = { mode, url, appPackage, pin ->
-                                configRepository.updateConfig {
-                                    it.copy(
-                                        primaryMode = mode,
-                                        startUrl = url,
-                                        primaryAppPackage = appPackage,
-                                        pinCode = pin,
-                                        isFirstLaunchCompleted = true,
-                                        allowedApps = if (appPackage.isNotEmpty() && !it.allowedApps.contains(appPackage))
-                                            it.allowedApps + appPackage else it.allowedApps
-                                    )
-                                }
-                                applyConfigUpdates()
-                            }
                         )
                     }
 
@@ -308,13 +311,14 @@ class MainActivity : ComponentActivity() {
 
         if (config.isKioskEnabled) {
             if (deviceOwnerManager.isDeviceOwner) {
+                val allowed = (config.allowedApps + config.primaryAppPackage).filter { it.isNotBlank() }
                 deviceOwnerManager.applyKioskPolicies(
                     blockSafeMode = config.blockSafeMode,
                     blockUsb = config.blockUsbFileTransfer,
-                    disableStatusBar = config.blockSystemNavigation
+                    disableStatusBar = config.blockSystemNavigation,
+                    whitelistedPackages = allowed
                 )
                 deviceOwnerManager.setDefaultLauncher(true)
-                deviceOwnerManager.enforceStrictBackgroundRestrictions(config.allowedApps)
             }
             try {
                 startLockTask()

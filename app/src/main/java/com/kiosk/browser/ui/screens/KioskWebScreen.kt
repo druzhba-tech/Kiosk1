@@ -160,8 +160,14 @@ fun KioskWebScreen(
 
         // ── Получение состояния фонового обновления
         val updateState by mainActivity.updateManager.updateState.collectAsState()
-        val updateVersion = (updateState as? com.kiosk.browser.core.update.UpdateState.Available)?.versionName
+        val updateVersion = when (val s = updateState) {
+            is com.kiosk.browser.core.update.UpdateState.Available -> s.versionName
+            is com.kiosk.browser.core.update.UpdateState.Downloading -> s.versionName
+            is com.kiosk.browser.core.update.UpdateState.ReadyToInstall -> s.versionName
+            else -> null
+        }
         val updateProgress = (updateState as? com.kiosk.browser.core.update.UpdateState.Downloading)?.progressPercent
+        val isReadyToInstall = updateState is com.kiosk.browser.core.update.UpdateState.ReadyToInstall
         val isInstalling = updateState is com.kiosk.browser.core.update.UpdateState.Installing
 
         // Информационная панель (вертикальная/горизонтальная, со слайдером яркости и Wi-Fi)
@@ -176,15 +182,9 @@ fun KioskWebScreen(
             showKioskStatus = config.hudShowKioskStatus,
             updateVersion = updateVersion,
             updateProgress = updateProgress,
+            isReadyToInstall = isReadyToInstall,
             isInstallingUpdate = isInstalling,
-            onUpdateClick = {
-                if (updateState is com.kiosk.browser.core.update.UpdateState.Available) {
-                    val url = (updateState as com.kiosk.browser.core.update.UpdateState.Available).downloadUrl
-                    mainActivity.lifecycleScope.launch {
-                        mainActivity.updateManager.downloadAndInstall(url)
-                    }
-                }
-            },
+            onUpdateClick = { mainActivity.onUpdateBadgeClicked() },
             onLauncherClick = onBackToLauncher,
             modifier = hudModifier
         )

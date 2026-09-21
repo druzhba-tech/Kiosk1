@@ -70,6 +70,7 @@ fun KioskStatusBar(
     showKioskStatus: Boolean = true,
     updateVersion: String? = null,
     updateProgress: Int? = null,
+    isReadyToInstall: Boolean = false,
     isInstallingUpdate: Boolean = false,
     onUpdateClick: (() -> Unit)? = null,
     onLauncherClick: (() -> Unit)? = null,
@@ -179,7 +180,7 @@ fun KioskStatusBar(
     )
 
     // Анимация пульсации при наличии обновления
-    val hasUpdate = updateVersion != null || updateProgress != null || isInstallingUpdate
+    val hasUpdate = updateVersion != null || updateProgress != null || isReadyToInstall || isInstallingUpdate
     val updatePulse = rememberInfiniteTransition(label = "updatePulse")
     val updateGlowAlpha by updatePulse.animateFloat(
         initialValue = 0.4f,
@@ -404,13 +405,21 @@ fun KioskStatusBar(
         if (hasUpdate) {
             val badgeColor = when {
                 isInstallingUpdate     -> NeonOrange
+                isReadyToInstall       -> NeonGreen
                 updateProgress != null -> NeonCyan
-                else                   -> NeonGreen
+                else                   -> NeonCyan
             }
             val badgeText = when {
                 isInstallingUpdate     -> "УСТАНОВКА..."
-                updateProgress != null -> "$updateProgress%"
+                isReadyToInstall       -> "УСТАНОВИТЬ v$updateVersion"
+                updateProgress != null -> "СКАЧИВАНИЕ $updateProgress%"
                 else                   -> "ОБНОВЛЕНИЕ v$updateVersion"
+            }
+            val badgeIcon = when {
+                isInstallingUpdate     -> Icons.Default.CloudDownload
+                isReadyToInstall       -> Icons.Default.SystemUpdate
+                updateProgress != null -> Icons.Default.CloudDownload
+                else                   -> Icons.Default.SystemUpdate
             }
 
             Surface(
@@ -430,8 +439,8 @@ fun KioskStatusBar(
                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                 ) {
                     Icon(
-                        imageVector = if (isInstallingUpdate) Icons.Default.CloudDownload else Icons.Default.SystemUpdate,
-                        contentDescription = "Update Available",
+                        imageVector = badgeIcon,
+                        contentDescription = "Update Status",
                         tint = badgeColor,
                         modifier = Modifier.size(if (isExpanded) 18.dp else 14.dp)
                     )

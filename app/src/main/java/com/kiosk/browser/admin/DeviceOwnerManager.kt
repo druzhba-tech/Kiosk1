@@ -48,7 +48,9 @@ class DeviceOwnerManager(private val context: Context) {
                     context.packageName,
                     "com.android.settings",
                     "com.google.android.settings",
-                    "com.android.settings.intelligence"
+                    "com.android.settings.intelligence",
+                    "com.android.packageinstaller",
+                    "com.google.android.packageinstaller"
                 )
             )
 

@@ -5,12 +5,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
-import android.os.Build
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -23,7 +25,8 @@ sealed class UpdateState {
     object Idle : UpdateState()
     object Checking : UpdateState()
     data class Available(val versionName: String, val downloadUrl: String, val releaseNotes: String) : UpdateState()
-    data class Downloading(val progressPercent: Int, val downloadedBytes: Long, val totalBytes: Long) : UpdateState()
+    data class Downloading(val progressPercent: Int, val downloadedBytes: Long, val totalBytes: Long, val versionName: String) : UpdateState()
+    data class ReadyToInstall(val apkFile: File, val versionName: String) : UpdateState()
     object Installing : UpdateState()
     data class Error(val message: String) : UpdateState()
 }
@@ -33,12 +36,18 @@ class KioskUpdateManager(private val context: Context) {
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val githubRepo = "druzhba-tech/Kiosk1"
+    private var isDownloading = false
 
     /**
-     * Проверка наличия новой версии через GitHub Releases API
+     * Проверка наличия новой версии через GitHub Releases API (в фоне)
      */
     suspend fun checkForUpdates(currentVersionName: String): UpdateState = withContext(Dispatchers.IO) {
+        if (isDownloading || _updateState.value is UpdateState.ReadyToInstall || _updateState.value is UpdateState.Installing) {
+            return@withContext _updateState.value
+        }
+
         _updateState.value = UpdateState.Checking
         try {
             android.util.Log.i("KioskUpdateManager", "Проверка обновлений GitHub. Текущая версия: $currentVersionName")
@@ -71,9 +80,12 @@ class KioskUpdateManager(private val context: Context) {
                 android.util.Log.i("KioskUpdateManager", "Найдена версия на GitHub: $latestTag, URL: $apkDownloadUrl")
 
                 if (apkDownloadUrl.isNotEmpty() && isNewerVersion(latestTag, currentVersionName)) {
-                    android.util.Log.i("KioskUpdateManager", "Обновление $latestTag доступно! (новее чем $currentVersionName)")
+                    android.util.Log.i("KioskUpdateManager", "Обновление $latestTag доступно! Запуск фонового скачивания...")
                     val available = UpdateState.Available(latestTag, apkDownloadUrl, releaseNotes)
                     _updateState.value = available
+
+                    // Сразу запускаем скачивание в фоне, не блокируя работу пользователя в киоске
+                    startBackgroundDownload(apkDownloadUrl, latestTag)
                     return@withContext available
                 } else {
                     android.util.Log.i("KioskUpdateManager", "Текущая версия актуальна ($currentVersionName >= $latestTag)")
@@ -85,8 +97,8 @@ class KioskUpdateManager(private val context: Context) {
             UpdateState.Idle
         } catch (e: Exception) {
             android.util.Log.e("KioskUpdateManager", "Ошибка проверки обновления: ${e.message}")
-            _updateState.value = UpdateState.Error(e.localizedMessage ?: "Ошибка проверки обновления")
-            UpdateState.Error(e.localizedMessage ?: "Ошибка проверки обновления")
+            _updateState.value = UpdateState.Idle
+            UpdateState.Idle
         }
     }
 
@@ -109,56 +121,73 @@ class KioskUpdateManager(private val context: Context) {
     }
 
     /**
-     * Скачивание APK файла с подсчетом процентов
+     * Фоновая загрузка APK файла без блокировки киоска
      */
-    suspend fun downloadAndInstall(downloadUrl: String) = withContext(Dispatchers.IO) {
-        try {
-            val updateFile = File(context.cacheDir, "kiosk-update.apk")
-            if (updateFile.exists()) updateFile.delete()
+    fun startBackgroundDownload(downloadUrl: String, versionName: String) {
+        if (isDownloading) return
+        scope.launch {
+            isDownloading = true
+            try {
+                val updateFile = File(context.cacheDir, "kiosk-update.apk")
+                if (updateFile.exists()) updateFile.delete()
 
-            val conn = URL(downloadUrl).openConnection() as HttpURLConnection
-            conn.setRequestProperty("User-Agent", "Kiosk-App-Updater")
-            conn.instanceFollowRedirects = true
-            conn.connect()
+                val conn = URL(downloadUrl).openConnection() as HttpURLConnection
+                conn.setRequestProperty("User-Agent", "Kiosk-App-Updater")
+                conn.instanceFollowRedirects = true
+                conn.connectTimeout = 15000
+                conn.readTimeout = 30000
+                conn.connect()
 
-            val fileLength = conn.contentLengthLong
+                val fileLength = conn.contentLengthLong
+                var lastReportedPercent = -1
 
-            conn.inputStream.use { input ->
-                FileOutputStream(updateFile).use { output ->
-                    val data = ByteArray(8192)
-                    var total: Long = 0
-                    var count: Int
-                    while (input.read(data).also { count = it } != -1) {
-                        total += count
-                        output.write(data, 0, count)
-                        if (fileLength > 0) {
-                            val percent = ((total * 100) / fileLength).toInt()
-                            _updateState.value = UpdateState.Downloading(percent, total, fileLength)
+                conn.inputStream.use { input ->
+                    FileOutputStream(updateFile).use { output ->
+                        val data = ByteArray(8192)
+                        var total: Long = 0
+                        var count: Int
+                        while (input.read(data).also { count = it } != -1) {
+                            total += count
+                            output.write(data, 0, count)
+                            if (fileLength > 0) {
+                                val percent = ((total * 100) / fileLength).toInt()
+                                // Обновляем UI с шагом 2% для экономии ресурсов
+                                if (percent != lastReportedPercent && (percent % 2 == 0 || percent == 100)) {
+                                    lastReportedPercent = percent
+                                    _updateState.value = UpdateState.Downloading(percent, total, fileLength, versionName)
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            _updateState.value = UpdateState.Installing
-            installApk(updateFile)
-        } catch (e: Exception) {
-            _updateState.value = UpdateState.Error("Ошибка скачивания: ${e.message}")
+                if (updateFile.exists() && updateFile.length() > 0) {
+                    android.util.Log.i("KioskUpdateManager", "Обновление v$versionName успешно скачано! Готово к установке.")
+                    _updateState.value = UpdateState.ReadyToInstall(updateFile, versionName)
+                } else {
+                    _updateState.value = UpdateState.Error("Файл обновления пуст")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("KioskUpdateManager", "Ошибка фонового скачивания: ${e.message}")
+                _updateState.value = UpdateState.Error("Ошибка скачивания: ${e.message}")
+            } finally {
+                isDownloading = false
+            }
         }
     }
 
     /**
-     * Запуск установки APK
+     * Установка APK файла (тихая для Device Owner, либо через стандартный диалог Android)
      */
     fun installApk(file: File) {
+        _updateState.value = UpdateState.Installing
         try {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
             val isDeviceOwner = dpm.isDeviceOwnerApp(context.packageName)
 
             if (isDeviceOwner) {
-                // Если мы Device Owner — устанавливаем тихо через PackageInstaller без запросов
                 installSilentlyAsDeviceOwner(file)
             } else {
-                // Иначе стандартный системный установщик Android
                 installViaIntent(file)
             }
         } catch (e: Exception) {
@@ -168,41 +197,51 @@ class KioskUpdateManager(private val context: Context) {
     }
 
     private fun installSilentlyAsDeviceOwner(apkFile: File) {
-        val packageInstaller = context.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-        val sessionId = packageInstaller.createSession(params)
-        val session = packageInstaller.openSession(sessionId)
+        try {
+            val packageInstaller = context.packageManager.packageInstaller
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+            val sessionId = packageInstaller.createSession(params)
+            val session = packageInstaller.openSession(sessionId)
 
-        FileInputStream(apkFile).use { input ->
-            session.openWrite("kiosk_update", 0, apkFile.length()).use { output ->
-                input.copyTo(output)
-                session.fsync(output)
+            FileInputStream(apkFile).use { input ->
+                session.openWrite("kiosk_update", 0, apkFile.length()).use { output ->
+                    input.copyTo(output)
+                    session.fsync(output)
+                }
             }
-        }
 
-        val intent = Intent(context, KioskUpdateReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            sessionId,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-        session.commit(pendingIntent.intentSender)
-        session.close()
+            val intent = Intent(context, KioskUpdateReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                sessionId,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            )
+            session.commit(pendingIntent.intentSender)
+            session.close()
+        } catch (e: Exception) {
+            android.util.Log.e("KioskUpdateManager", "Silent install failed, falling back to intent: ${e.message}")
+            installViaIntent(apkFile)
+        }
     }
 
     private fun installViaIntent(file: File) {
-        val uri: Uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            val uri: Uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("KioskUpdateManager", "Ошибка запуска установки: ${e.message}")
+            _updateState.value = UpdateState.Error("Не удалось запустить установщик: ${e.message}")
         }
-        context.startActivity(intent)
     }
 
     fun dismiss() {

@@ -122,14 +122,15 @@ class MainActivity : ComponentActivity() {
         }
 
         applyConfigUpdates()
-        // Автопроверка обновлений по воздуху (OTA): сразу при старте и каждые 3 минуты
+        // Фоновая периодическая проверка обновлений: через 60 секунд после старта и далее раз в 4 часа
         lifecycleScope.launch {
+            delay(60_000L)
             while (isActive) {
                 val versionName = runCatching {
                     packageManager.getPackageInfo(packageName, 0).versionName
                 }.getOrNull() ?: "1.0.0"
                 updateManager.checkForUpdates(versionName)
-                delay(180_000L)
+                delay(4 * 3600 * 1000L)
             }
         }
 
@@ -208,18 +209,6 @@ class MainActivity : ComponentActivity() {
                             onClose = { showSettings = false }
                         )
                     }
-
-                    // ── Диалог автообновления (OTA) ──
-                    val updateState by updateManager.updateState.collectAsState()
-                    UpdateDialog(
-                        state = updateState,
-                        onInstallClick = { downloadUrl ->
-                            lifecycleScope.launch {
-                                updateManager.downloadAndInstall(downloadUrl)
-                            }
-                        },
-                        onDismiss = { updateManager.dismiss() }
-                    )
 
                     // ── Мастер первоначальной настройки при первом запуске ──
                     if (!config.isFirstLaunchCompleted) {
@@ -332,11 +321,6 @@ class MainActivity : ComponentActivity() {
     fun startKioskMode() {
         configRepository.updateConfig { it.copy(isKioskEnabled = true) }
         applyConfigUpdates()
-        // Автопроверка обновлений по воздуху (OTA)
-        lifecycleScope.launch {
-            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
-            updateManager.checkForUpdates(versionName)
-        }
     }
 
     fun exitKioskMode() {
@@ -394,6 +378,44 @@ class MainActivity : ComponentActivity() {
                     startActivity(fallback)
                 } catch (ex: Exception) {
                     ex.printStackTrace()
+                }
+            }
+        }
+    }
+
+    /**
+     * Обработка нажатия на значок обновления в строке состояния:
+     * - если скачано: запускает установку APK
+     * - если скачивается: показывает прогресс (киоск продолжает работать)
+     * - если доступно: запускает фоновую загрузку
+     */
+    fun onUpdateBadgeClicked() {
+        when (val state = updateManager.updateState.value) {
+            is com.kiosk.browser.core.update.UpdateState.ReadyToInstall -> {
+                if (isInLockTaskMode) {
+                    try {
+                        stopLockTask()
+                    } catch (_: Exception) {}
+                }
+                updateManager.installApk(state.apkFile)
+            }
+            is com.kiosk.browser.core.update.UpdateState.Available -> {
+                android.widget.Toast.makeText(this, "Загрузка обновления v${state.versionName} в фоне...", android.widget.Toast.LENGTH_SHORT).show()
+                updateManager.startBackgroundDownload(state.downloadUrl, state.versionName)
+            }
+            is com.kiosk.browser.core.update.UpdateState.Downloading -> {
+                android.widget.Toast.makeText(this, "Скачивание обновления: ${state.progressPercent}% (киоск работает)", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            is com.kiosk.browser.core.update.UpdateState.Installing -> {
+                android.widget.Toast.makeText(this, "Установка обновления...", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            else -> {
+                val versionName = runCatching {
+                    packageManager.getPackageInfo(packageName, 0).versionName
+                }.getOrNull() ?: "1.0.0"
+                lifecycleScope.launch {
+                    android.widget.Toast.makeText(this@MainActivity, "Проверка обновлений...", android.widget.Toast.LENGTH_SHORT).show()
+                    updateManager.checkForUpdates(versionName)
                 }
             }
         }

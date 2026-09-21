@@ -15,9 +15,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
-    <!-- РђРїРїР°СЂР°С‚РЅС‹Рµ РјРѕРґСѓР»Рё -->
+    <!-- Аппаратные модули и установка обновлений -->
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.REORDER_TASKS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё РґР»СЏ WebRTC Рё СЃРєР°РЅРёСЂРѕРІР°РЅРёСЏ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ) -->
     <uses-feature android:name="android.hardware.nfc" android:required="false" />

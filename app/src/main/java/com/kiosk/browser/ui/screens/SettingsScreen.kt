@@ -262,7 +262,7 @@ fun SettingsScreen(
                         }
                         is UpdateState.ReadyToInstall -> {
                             Button(
-                                onClick = { mainActivity.updateManager.installDownloadedApk() },
+                                onClick = { mainActivity.updateManager.installApk(state.apkFile) },
                                 colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
                                 modifier = Modifier.fillMaxWidth()
                             ) {

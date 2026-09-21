@@ -421,6 +421,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        enableImmersiveMode()
         if (deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
             deviceOwnerManager.setDefaultLauncher(true)
         }
@@ -429,6 +430,12 @@ class MainActivity : ComponentActivity() {
             try {
                 startLockTask()
             } catch (_: Exception) {}
+        }
+        val versionName = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrNull() ?: "1.0.0"
+        lifecycleScope.launch {
+            updateManager.checkForUpdates(versionName)
         }
     }
 
@@ -505,20 +512,6 @@ class MainActivity : ComponentActivity() {
             return
         }
         super.onBackPressed()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        enableImmersiveMode()
-        if (deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
-            deviceOwnerManager.setDefaultLauncher(true)
-        }
-        val versionName = runCatching {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull() ?: "1.0.0"
-        lifecycleScope.launch {
-            updateManager.checkForUpdates(versionName)
-        }
     }
 
     override fun onDestroy() {

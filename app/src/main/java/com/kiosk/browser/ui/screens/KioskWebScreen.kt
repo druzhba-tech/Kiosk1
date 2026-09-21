@@ -66,7 +66,11 @@ fun KioskWebScreen(
         // ── Полноэкранный WebView с Pull-to-Refresh ──
         AndroidView(
             factory = { context ->
-                val webView = WebView(context).apply {
+                val webView = object : WebView(context) {
+                    override fun startActionMode(callback: ActionMode?): ActionMode? = null
+                    override fun startActionMode(callback: ActionMode.Callback?): ActionMode? = null
+                    override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? = null
+                }.apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -75,21 +79,6 @@ fun KioskWebScreen(
                     isLongClickable = false
                     isHapticFeedbackEnabled = false
                     setOnLongClickListener { true }
-
-                    customSelectionActionModeCallback = object : ActionMode.Callback {
-                        override fun onCreateActionMode(mode: ActionMode?, menu: Menu?) = false
-                        override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) = false
-                        override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?) = false
-                        override fun onDestroyActionMode(mode: ActionMode?) {}
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        customInsertionActionModeCallback = object : ActionMode.Callback {
-                            override fun onCreateActionMode(mode: ActionMode?, menu: Menu?) = false
-                            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) = false
-                            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?) = false
-                            override fun onDestroyActionMode(mode: ActionMode?) {}
-                        }
-                    }
 
                     settings.apply {
                         javaScriptEnabled = true

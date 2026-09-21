@@ -10,6 +10,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Телефония и SMS (для блокировки звонков и спам-сообщений на планшетах с SIM) -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
     <!-- РџРёС‚Р°РЅРёРµ Рё С„РѕРЅРѕРІР°СЏ СЂР°Р±РѕС‚Р° -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -137,6 +142,27 @@
         <receiver
             android:name=".core.update.KioskUpdateReceiver"
             android:exported="false" />
+
+        <!-- Блокировщик входящих вызовов для SIM -->
+        <receiver
+            android:name=".core.telephony.CallBlockReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter priority="999">
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Блокировщик входящих SMS сообщений для SIM -->
+        <receiver
+            android:name=".core.telephony.SmsBlockReceiver"
+            android:enabled="true"
+            android:permission="android.permission.BROADCAST_SMS"
+            android:exported="true">
+            <intent-filter priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

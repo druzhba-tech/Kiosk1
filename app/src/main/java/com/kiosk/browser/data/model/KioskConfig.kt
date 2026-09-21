@@ -36,11 +36,17 @@ data class KioskConfig(
     val blockSystemNavigation: Boolean = true,
     val blockUsbFileTransfer: Boolean = false,
     val blockSafeMode: Boolean = false,
+    val blockPhoneCallsAndSms: Boolean = true, // Запрет звонков и SMS при работе через SIM
+    val blockTethering: Boolean = true, // Запрет раздачи Wi-Fi точки доступа с SIM-карты
 
     // Браузер и сеть
     val ignoreSslErrors: Boolean = true,
     val clearDataOnIdle: Boolean = false,
     val autoReloadOnNetworkRecover: Boolean = true,
+    val enablePullToRefresh: Boolean = true, // Обновление страницы жестом вниз (только вверху)
+    val preventZoom: Boolean = true, // Блокировка случайного зума и double-tap
+    val enforceMinOrderVolume: Boolean = true, // Защита от случайного выключения звука заказов
+    val minOrderVolumePercent: Int = 60, // Минимальный порог громкости (60%)
     val dailyRebootTimeHour: Int = 4,
     val allowedUrls: List<String> = listOf("http://*", "https://*"),
     val blockedUrls: List<String> = emptyList(),

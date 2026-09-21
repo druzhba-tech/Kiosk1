@@ -91,6 +91,17 @@ fun KioskWebScreen(
                         mediaPlaybackRequiresUserGesture = false
                         cacheMode = WebSettings.LOAD_DEFAULT
 
+                        // Защита от случайного масштабирования на сенсорных экранах
+                        if (config.preventZoom) {
+                            setSupportZoom(false)
+                            builtInZoomControls = false
+                            displayZoomControls = false
+                        } else {
+                            setSupportZoom(true)
+                            builtInZoomControls = true
+                            displayZoomControls = false
+                        }
+
                         // Запоминание паролей и автозаполнение
                         saveFormData = true
                         @Suppress("DEPRECATION")
@@ -106,6 +117,8 @@ fun KioskWebScreen(
                     cookieManager.setAcceptThirdPartyCookies(this, true)
                 }
 
+                lateinit var jsBridge: JavaScriptBridge
+
                 val swipeRefresh = SwipeRefreshLayout(context).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -113,6 +126,13 @@ fun KioskWebScreen(
                     )
                     setColorSchemeColors(android.graphics.Color.parseColor("#00F0FF"))
                     setProgressBackgroundColorSchemeColor(android.graphics.Color.parseColor("#111827"))
+                    isEnabled = config.enablePullToRefresh
+
+                    // Строгий коллбэк: если страница хоть немного прокручена вниз, жест обновления полностью запрещен!
+                    setOnChildScrollUpCallback { _, _ ->
+                        val isAtTop = webView.scrollY <= 0 && !webView.canScrollVertically(-1) && jsBridge.isPageAtTop
+                        !isAtTop
+                    }
 
                     setOnRefreshListener {
                         webView.reload()
@@ -120,10 +140,22 @@ fun KioskWebScreen(
                     addView(webView)
                 }
 
+                // Слушатель скролла: если scrollY > 0, сразу отключаем SwipeRefreshLayout,
+                // чтобы свайп сверху вниз гарантированно прокручивал сайт вверх, а не вызывал перезагрузку!
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+                        if (config.enablePullToRefresh) {
+                            swipeRefresh.isEnabled = (scrollY <= 0 && !webView.canScrollVertically(-1) && jsBridge.isPageAtTop)
+                        }
+                    }
+                }
+
                 val filterManager = UrlFilterManager(config.allowedUrls, config.blockedUrls)
                 webView.webViewClient = KioskWebViewClient(
                     filterManager = filterManager,
                     isIgnoreSslErrors = { config.ignoreSslErrors },
+                    isBlockCallsAndSms = { config.blockPhoneCallsAndSms },
+                    isPreventZoom = { config.preventZoom },
                     onCrashRecover = { webView.post { webView.loadUrl(config.startUrl) } },
                     onPageLoaded = { _ ->
                         swipeRefresh.isRefreshing = false
@@ -141,13 +173,20 @@ fun KioskWebScreen(
                     onFullscreenExit = { }
                 )
 
-                val jsBridge = JavaScriptBridge(
+                jsBridge = JavaScriptBridge(
                     context = context,
                     batteryTracker = mainActivity.batteryTracker,
                     onScreenControl = { turnOn -> mainActivity.controlScreen(turnOn) },
                     onSavePasswordPrompt = { domain, username, password ->
                         mainActivity.runOnUiThread {
                             pendingPasswordPrompt = Triple(domain, username, password)
+                        }
+                    },
+                    onScrollStateChange = { isAtTop ->
+                        mainActivity.runOnUiThread {
+                            if (config.enablePullToRefresh) {
+                                swipeRefresh.isEnabled = (isAtTop && webView.scrollY <= 0 && !webView.canScrollVertically(-1))
+                            }
                         }
                     }
                 )

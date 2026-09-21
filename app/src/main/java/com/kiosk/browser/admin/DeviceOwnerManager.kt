@@ -38,6 +38,8 @@ class DeviceOwnerManager(private val context: Context) {
         blockSafeMode: Boolean,
         blockUsb: Boolean,
         disableStatusBar: Boolean,
+        blockCallsAndSms: Boolean = true,
+        blockTethering: Boolean = true,
         whitelistedPackages: List<String> = emptyList()
     ) {
         if (!isDeviceOwner) return
@@ -74,6 +76,20 @@ class DeviceOwnerManager(private val context: Context) {
             } else {
                 dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_USB_FILE_TRANSFER)
                 dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
+            }
+
+            if (blockCallsAndSms) {
+                dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_OUTGOING_CALLS)
+                dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_SMS)
+            } else {
+                dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_OUTGOING_CALLS)
+                dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_SMS)
+            }
+
+            if (blockTethering) {
+                dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_TETHERING)
+            } else {
+                dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_TETHERING)
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -156,6 +172,9 @@ class DeviceOwnerManager(private val context: Context) {
             dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_APPS_CONTROL)
             dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_MODIFY_ACCOUNTS)
             dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
+            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_OUTGOING_CALLS)
+            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_SMS)
+            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_TETHERING)
 
             // Разморозка приложений
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

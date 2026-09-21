@@ -79,6 +79,13 @@ fun SettingsScreen(
     var hudShowBattery by remember { mutableStateOf(currentConfig.hudShowBattery) }
     var hudShowKioskStatus by remember { mutableStateOf(currentConfig.hudShowKioskStatus) }
 
+    // Телефония, защита экрана и надежность
+    var blockCallsAndSms by remember { mutableStateOf(currentConfig.blockPhoneCallsAndSms) }
+    var blockTethering by remember { mutableStateOf(currentConfig.blockTethering) }
+    var enablePullToRefresh by remember { mutableStateOf(currentConfig.enablePullToRefresh) }
+    var preventZoom by remember { mutableStateOf(currentConfig.preventZoom) }
+    var enforceMinVolume by remember { mutableStateOf(currentConfig.enforceMinOrderVolume) }
+
     val coroutineScope = rememberCoroutineScope()
     val packageInfo = remember {
         runCatching {
@@ -122,7 +129,12 @@ fun SettingsScreen(
                 hudShowVolume = hudShowVolume,
                 hudShowWifi = hudShowWifi,
                 hudShowBattery = hudShowBattery,
-                hudShowKioskStatus = hudShowKioskStatus
+                hudShowKioskStatus = hudShowKioskStatus,
+                blockPhoneCallsAndSms = blockCallsAndSms,
+                blockTethering = blockTethering,
+                enablePullToRefresh = enablePullToRefresh,
+                preventZoom = preventZoom,
+                enforceMinOrderVolume = enforceMinVolume
             )
         }
         mainActivity.applyConfigUpdates()
@@ -798,11 +810,33 @@ fun SettingsScreen(
                             )
                         }
                     }
+
+                    Spacer(Modifier.height(4.dp))
+                    SettingsToggle(
+                        title = "Защита от выключения звука заказов",
+                        subtitle = "Не позволяет убавить звук медиа и заказов ниже 60% физическими кнопками",
+                        checked = enforceMinVolume,
+                        onCheckedChange = { enforceMinVolume = it }
+                    )
                 }
             }
 
             // Веб и сеть
             SettingsCard(title = "Веб и сеть", icon = Icons.Default.Wifi) {
+                SettingsToggle(
+                    title = "Обновление страницы жестом вниз (Pull-to-refresh)",
+                    subtitle = "Срабатывает строго при свайпе с самого верха страницы (scrollY = 0)",
+                    checked = enablePullToRefresh,
+                    onCheckedChange = { enablePullToRefresh = it }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsToggle(
+                    title = "Защита от случайного масштабирования (Zoom)",
+                    subtitle = "Блокирует случайный double-tap и сведение пальцев на сенсорных экранах",
+                    checked = preventZoom,
+                    onCheckedChange = { preventZoom = it }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 SettingsToggle(
                     title = "Игнорировать ошибки SSL",
                     subtitle = "Необходимо для локальных серверов (https://192.168.x.x)",
@@ -834,6 +868,20 @@ fun SettingsScreen(
                     subtitle = "Громкость и навигация системы",
                     checked = blockKeys,
                     onCheckedChange = { blockKeys = it }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsToggle(
+                    title = "Блокировка звонков и SMS (для SIM)",
+                    subtitle = "Мгновенно сбрасывает входящие вызовы и глушит SMS на планшетах с SIM-картой",
+                    checked = blockCallsAndSms,
+                    onCheckedChange = { blockCallsAndSms = it }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsToggle(
+                    title = "Запрет раздачи интернета (Wi-Fi Hotspot)",
+                    subtitle = "Предотвращает нецелевой расход интернет-трафика рабочей SIM-карты персоналом",
+                    checked = blockTethering,
+                    onCheckedChange = { blockTethering = it }
                 )
             }
 

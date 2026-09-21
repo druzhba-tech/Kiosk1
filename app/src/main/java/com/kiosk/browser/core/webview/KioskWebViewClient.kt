@@ -13,12 +13,18 @@ import android.webkit.WebViewClient
 class KioskWebViewClient(
     private val filterManager: UrlFilterManager,
     private val isIgnoreSslErrors: () -> Boolean,
+    private val isBlockCallsAndSms: () -> Boolean = { true },
+    private val isPreventZoom: () -> Boolean = { true },
     private val onCrashRecover: () -> Unit,
     private val onPageLoaded: (String) -> Unit
 ) : WebViewClient() {
 
     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
         val url = request?.url?.toString() ?: return false
+        val lower = url.lowercase()
+        if (isBlockCallsAndSms() && (lower.startsWith("tel:") || lower.startsWith("sms:") || lower.startsWith("smsto:") || lower.startsWith("mms:") || lower.startsWith("mmsto:"))) {
+            return true // Блокируем вызовы и SMS из веб-страниц
+        }
         if (filterManager.isUrlAllowed(url)) {
             return false
         }
@@ -28,6 +34,10 @@ class KioskWebViewClient(
     @Deprecated("Deprecated in Java")
     override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
         if (url == null) return false
+        val lower = url.lowercase()
+        if (isBlockCallsAndSms() && (lower.startsWith("tel:") || lower.startsWith("sms:") || lower.startsWith("smsto:") || lower.startsWith("mms:") || lower.startsWith("mmsto:"))) {
+            return true // Блокируем вызовы и SMS из веб-страниц
+        }
         if (filterManager.isUrlAllowed(url)) {
             return false
         }
@@ -68,6 +78,12 @@ class KioskWebViewClient(
         injectTextSelectionBlock(view)
         // Автозаполнение сохраненных логинов/паролей и перехват отправки форм
         injectPasswordAutofillAndCapture(view)
+        // Защита от случайного зума и double-tap масштабирования
+        if (isPreventZoom()) {
+            injectZoomPrevention(view)
+        }
+        // Трекинг скролла для предотвращения ложного pull-to-refresh
+        injectScrollTracker(view)
     }
 
     /**
@@ -263,6 +279,71 @@ class KioskWebViewClient(
             })();
         """.trimIndent()
 
+        view?.evaluateJavascript(script, null)
+    }
+
+    /**
+     * Блокировка масштабирования и double-tap zoom для сенсорных экранов кухни
+     */
+    private fun injectZoomPrevention(view: WebView?) {
+        val script = """
+            (function() {
+                try {
+                    var meta = document.querySelector('meta[name="viewport"]');
+                    if (!meta) {
+                        meta = document.createElement('meta');
+                        meta.name = 'viewport';
+                        document.head.appendChild(meta);
+                    }
+                    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+
+                    var lastTouchEnd = 0;
+                    document.addEventListener('touchend', function(event) {
+                        var now = (new Date()).getTime();
+                        if (now - lastTouchEnd <= 300) {
+                            event.preventDefault();
+                        }
+                        lastTouchEnd = now;
+                    }, false);
+                } catch(e) {}
+            })();
+        """.trimIndent()
+        view?.evaluateJavascript(script, null)
+    }
+
+    /**
+     * Инъекция слушателя прокрутки страницы и внутренних контейнеров
+     * для надежной работы pull-to-refresh только в самом верху
+     */
+    private fun injectScrollTracker(view: WebView?) {
+        val script = """
+            (function() {
+                try {
+                    function notifyScroll() {
+                        var isTop = (window.scrollY <= 0) &&
+                            (!document.documentElement || document.documentElement.scrollTop <= 0) &&
+                            (!document.body || document.body.scrollTop <= 0);
+                        if (isTop) {
+                            var el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+                            while (el && el !== document.body && el !== document.documentElement) {
+                                if (el.scrollTop > 0) {
+                                    isTop = false;
+                                    break;
+                                }
+                                el = el.parentElement;
+                            }
+                        }
+                        if (window.kiosk && window.kiosk.notifyScrollAtTop) {
+                            window.kiosk.notifyScrollAtTop(isTop);
+                        }
+                    }
+                    window.addEventListener('scroll', notifyScroll, { passive: true });
+                    document.addEventListener('scroll', notifyScroll, { passive: true, capture: true });
+                    document.addEventListener('touchstart', notifyScroll, { passive: true });
+                    notifyScroll();
+                } catch(e) {}
+            })();
+        """.trimIndent()
         view?.evaluateJavascript(script, null)
     }
 }

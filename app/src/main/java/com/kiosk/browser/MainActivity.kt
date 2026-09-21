@@ -1,6 +1,10 @@
 package com.kiosk.browser
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
@@ -134,6 +138,33 @@ class MainActivity : ComponentActivity() {
                 delay(15 * 60 * 1000L)
             }
         }
+
+        // Ежедневная тихая ночная перезагрузка веб-страницы в заданный час для очистки кэша/памяти WebKit
+        lifecycleScope.launch {
+            while (isActive) {
+                delay(60_000L)
+                val config = configRepository.getConfig()
+                val calendar = java.util.Calendar.getInstance()
+                val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+                val minute = calendar.get(java.util.Calendar.MINUTE)
+                if (hour == config.dailyRebootTimeHour && minute == 0) {
+                    runOnUiThread {
+                        currentWebView?.reload()
+                    }
+                    delay(65_000L)
+                }
+            }
+        }
+
+        // Слушатель изменения громкости для предотвращения случайного выключения звука заказов на кухне
+        val volumeReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                checkAndEnforceMinVolume()
+            }
+        }
+        try {
+            registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"))
+        } catch (_: Exception) {}
 
         val serviceIntent = Intent(this, KioskForegroundService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -317,15 +348,33 @@ class MainActivity : ComponentActivity() {
                     blockSafeMode = config.blockSafeMode,
                     blockUsb = config.blockUsbFileTransfer,
                     disableStatusBar = config.blockSystemNavigation,
+                    blockCallsAndSms = config.blockPhoneCallsAndSms,
+                    blockTethering = config.blockTethering,
                     whitelistedPackages = allowed
                 )
                 deviceOwnerManager.setDefaultLauncher(true)
             }
+            checkAndEnforceMinVolume()
             try {
                 startLockTask()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    fun checkAndEnforceMinVolume() {
+        val config = configRepository.getConfig()
+        if (config.enforceMinOrderVolume) {
+            try {
+                val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                val minVol = ((maxVol * config.minOrderVolumePercent) / 100).coerceAtLeast(1)
+                val currentVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                if (currentVol < minVol) {
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, minVol, 0)
+                }
+            } catch (_: Exception) {}
         }
     }
 

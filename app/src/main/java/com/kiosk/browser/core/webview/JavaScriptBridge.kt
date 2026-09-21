@@ -15,8 +15,12 @@ class JavaScriptBridge(
     private val batteryTracker: BatteryTracker,
     val passwordManager: PasswordManager = PasswordManager(context),
     private val onScreenControl: (turnOn: Boolean) -> Unit,
-    private val onSavePasswordPrompt: ((domain: String, username: String, password: String) -> Unit)? = null
+    private val onSavePasswordPrompt: ((domain: String, username: String, password: String) -> Unit)? = null,
+    private val onScrollStateChange: ((isAtTop: Boolean) -> Unit)? = null
 ) {
+
+    @Volatile
+    var isPageAtTop: Boolean = true
 
     private var tts: TextToSpeech? = null
 
@@ -56,6 +60,12 @@ class JavaScriptBridge(
     @JavascriptInterface
     fun showToast(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
+    @JavascriptInterface
+    fun notifyScrollAtTop(atTop: Boolean) {
+        isPageAtTop = atTop
+        onScrollStateChange?.invoke(atTop)
     }
 
     @JavascriptInterface

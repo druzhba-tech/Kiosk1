@@ -407,14 +407,86 @@ fun KioskStatusBar(
                         notifyInteraction()
                         onUpdateClick?.invoke()
                     }
-                    .padding(itemPadding)
+                    .padding(itemPadding),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = badgeIcon,
-                    contentDescription = "Update",
-                    tint = badgeColor,
-                    modifier = Modifier.size(iconSize)
-                )
+                if (isVertical) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (updateProgress != null) {
+                                CircularProgressIndicator(
+                                    progress = { updateProgress / 100f },
+                                    modifier = Modifier.size(iconSize + 6.dp),
+                                    color = NeonCyan,
+                                    trackColor = CyberSurface,
+                                    strokeWidth = 2.dp
+                                )
+                            } else if (isInstallingUpdate) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(iconSize + 6.dp),
+                                    color = NeonOrange,
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                            Icon(
+                                imageVector = badgeIcon,
+                                contentDescription = "Update",
+                                tint = badgeColor,
+                                modifier = Modifier.size(iconSize)
+                            )
+                        }
+                        if (updateProgress != null) {
+                            Text(
+                                text = "$updateProgress%",
+                                color = NeonCyan,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (updateProgress != null) {
+                                CircularProgressIndicator(
+                                    progress = { updateProgress / 100f },
+                                    modifier = Modifier.size(iconSize + 6.dp),
+                                    color = NeonCyan,
+                                    trackColor = CyberSurface,
+                                    strokeWidth = 2.dp
+                                )
+                            } else if (isInstallingUpdate) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(iconSize + 6.dp),
+                                    color = NeonOrange,
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                            Icon(
+                                imageVector = badgeIcon,
+                                contentDescription = "Update",
+                                tint = badgeColor,
+                                modifier = Modifier.size(iconSize)
+                            )
+                        }
+                        if (updateProgress != null) {
+                            Text(
+                                text = "$updateProgress%",
+                                color = NeonCyan,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
             }
         }
 

@@ -1,7 +1,9 @@
 package com.kiosk.browser.ui.screens
 
 import android.content.Intent
+import android.os.Build
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -22,13 +24,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiosk.browser.MainActivity
+import com.kiosk.browser.core.update.UpdateState
 import com.kiosk.browser.data.model.KioskConfig
 import com.kiosk.browser.ui.components.AppPickerDialog
 import com.kiosk.browser.ui.theme.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +76,21 @@ fun SettingsScreen(
     var hudShowBattery by remember { mutableStateOf(currentConfig.hudShowBattery) }
     var hudShowKioskStatus by remember { mutableStateOf(currentConfig.hudShowKioskStatus) }
 
+    val coroutineScope = rememberCoroutineScope()
+    val packageInfo = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }.getOrNull()
+    }
+    val appVersionName = packageInfo?.versionName ?: "1.0.9"
+    val appVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        packageInfo?.longVersionCode ?: 10L
+    } else {
+        @Suppress("DEPRECATION")
+        packageInfo?.versionCode?.toLong() ?: 10L
+    }
+    val updateState by mainActivity.updateManager.updateState.collectAsState()
+
     fun saveAll() {
         mainActivity.configRepository.updateConfig {
             it.copy(
@@ -111,13 +131,21 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "KIOSK CONTROL CENTER",
-                        color = NeonCyan,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    )
+                    Column {
+                        Text(
+                            text = "KIOSK CONTROL CENTER",
+                            color = NeonCyan,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Версия: v$appVersionName (сборка $appVersionCode)",
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
@@ -144,6 +172,126 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Карточка версии приложения и статуса обновлений
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = 1.dp,
+                        color = NeonCyan.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                colors = CardDefaults.cardColors(containerColor = CyberCard)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "ВЕРСИЯ ПРИЛОЖЕНИЯ",
+                                    color = NeonCyan,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = "v$appVersionName (сборка $appVersionCode)",
+                                    color = TextWhite,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        // Кнопка принудительной проверки обновлений
+                        OutlinedButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    Toast.makeText(context, "Проверка обновлений...", Toast.LENGTH_SHORT).show()
+                                    mainActivity.updateManager.checkForUpdates(appVersionName)
+                                }
+                            },
+                            enabled = updateState !is UpdateState.Checking && updateState !is UpdateState.Downloading,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                            border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.7f)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Проверить", fontSize = 12.sp)
+                        }
+                    }
+
+                    // Статус процесса обновления
+                    when (val state = updateState) {
+                        is UpdateState.Checking -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = NeonCyan, strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Поиск новой версии на GitHub...", color = TextMuted, fontSize = 12.sp)
+                            }
+                        }
+                        is UpdateState.Downloading -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Загрузка обновления v${state.versionName}...", color = NeonCyan, fontSize = 12.sp)
+                                    Text("${state.progressPercent}%", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                                LinearProgressIndicator(
+                                    progress = { state.progressPercent / 100f },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = NeonCyan,
+                                    trackColor = CyberSurface
+                                )
+                            }
+                        }
+                        is UpdateState.ReadyToInstall -> {
+                            Button(
+                                onClick = { mainActivity.updateManager.installDownloadedApk() },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = CyberBlack)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Установить обновление v${state.versionName}", color = CyberBlack, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        is UpdateState.Available -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Доступно обновление v${state.versionName}!", color = NeonGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Button(
+                                    onClick = { mainActivity.updateManager.startBackgroundDownload(state.downloadUrl, state.versionName) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonGreen)
+                                ) {
+                                    Text("Скачать", color = CyberBlack, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        else -> {
+                            Text("У вас установлена актуальная версия Kiosk Browser", color = TextMuted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
             // Главный статус киоска
             Card(
                 modifier = Modifier

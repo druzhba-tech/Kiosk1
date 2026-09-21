@@ -392,11 +392,9 @@ class MainActivity : ComponentActivity() {
     fun onUpdateBadgeClicked() {
         when (val state = updateManager.updateState.value) {
             is com.kiosk.browser.core.update.UpdateState.ReadyToInstall -> {
-                if (isInLockTaskMode) {
-                    try {
-                        stopLockTask()
-                    } catch (_: Exception) {}
-                }
+                try {
+                    stopLockTask()
+                } catch (_: Exception) {}
                 updateManager.installApk(state.apkFile)
             }
             is com.kiosk.browser.core.update.UpdateState.Available -> {

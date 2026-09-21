@@ -1,4 +1,4 @@
-﻿package com.kiosk.browser.core.update
+package com.kiosk.browser.core.update
 
 import android.app.PendingIntent
 import android.content.Context
@@ -33,7 +33,7 @@ class KioskUpdateManager(private val context: Context) {
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
-    private val githubRepo = "furuzon-tech/Kiosk1"
+    private val githubRepo = "druzhba-tech/Kiosk1"
 
     /**
      * Проверка наличия новой версии через GitHub Releases API
@@ -41,6 +41,7 @@ class KioskUpdateManager(private val context: Context) {
     suspend fun checkForUpdates(currentVersionName: String): UpdateState = withContext(Dispatchers.IO) {
         _updateState.value = UpdateState.Checking
         try {
+            android.util.Log.i("KioskUpdateManager", "Проверка обновлений GitHub. Текущая версия: $currentVersionName")
             val apiUrl = "https://api.github.com/repos/$githubRepo/releases/latest"
             val conn = URL(apiUrl).openConnection() as HttpURLConnection
             conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
@@ -51,7 +52,7 @@ class KioskUpdateManager(private val context: Context) {
             if (conn.responseCode == 200) {
                 val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
                 val json = JSONObject(jsonStr)
-                val latestTag = json.optString("tag_name", "").removePrefix("v")
+                val latestTag = json.optString("tag_name", "").removePrefix("v").trim()
                 val releaseNotes = json.optString("body", "Улучшения стабильности и новые функции")
                 val assets = json.optJSONArray("assets")
 
@@ -67,15 +68,23 @@ class KioskUpdateManager(private val context: Context) {
                     }
                 }
 
+                android.util.Log.i("KioskUpdateManager", "Найдена версия на GitHub: $latestTag, URL: $apkDownloadUrl")
+
                 if (apkDownloadUrl.isNotEmpty() && isNewerVersion(latestTag, currentVersionName)) {
+                    android.util.Log.i("KioskUpdateManager", "Обновление $latestTag доступно! (новее чем $currentVersionName)")
                     val available = UpdateState.Available(latestTag, apkDownloadUrl, releaseNotes)
                     _updateState.value = available
                     return@withContext available
+                } else {
+                    android.util.Log.i("KioskUpdateManager", "Текущая версия актуальна ($currentVersionName >= $latestTag)")
                 }
+            } else {
+                android.util.Log.w("KioskUpdateManager", "GitHub API ответил кодом: ${conn.responseCode}")
             }
             _updateState.value = UpdateState.Idle
             UpdateState.Idle
         } catch (e: Exception) {
+            android.util.Log.e("KioskUpdateManager", "Ошибка проверки обновления: ${e.message}")
             _updateState.value = UpdateState.Error(e.localizedMessage ?: "Ошибка проверки обновления")
             UpdateState.Error(e.localizedMessage ?: "Ошибка проверки обновления")
         }
@@ -83,8 +92,12 @@ class KioskUpdateManager(private val context: Context) {
 
     private fun isNewerVersion(latest: String, current: String): Boolean {
         if (latest.isEmpty() || current.isEmpty()) return false
-        val latestParts = latest.split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
+        val cleanLatest = latest.removePrefix("v").trim()
+        val cleanCurrent = current.removePrefix("v").trim()
+        if (cleanLatest == cleanCurrent) return false
+
+        val latestParts = cleanLatest.split(".").mapNotNull { it.toIntOrNull() }
+        val currentParts = cleanCurrent.split(".").mapNotNull { it.toIntOrNull() }
         val length = maxOf(latestParts.size, currentParts.size)
         for (i in 0 until length) {
             val l = latestParts.getOrElse(i) { 0 }

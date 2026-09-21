@@ -30,6 +30,8 @@ import com.kiosk.browser.ui.screens.PrimaryAppKioskScreen
 import com.kiosk.browser.ui.components.UpdateDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -120,10 +122,15 @@ class MainActivity : ComponentActivity() {
         }
 
         applyConfigUpdates()
-        // Автопроверка обновлений по воздуху (OTA)
+        // Автопроверка обновлений по воздуху (OTA): сразу при старте и каждые 3 минуты
         lifecycleScope.launch {
-            val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
-            updateManager.checkForUpdates(versionName)
+            while (isActive) {
+                val versionName = runCatching {
+                    packageManager.getPackageInfo(packageName, 0).versionName
+                }.getOrNull() ?: "1.0.0"
+                updateManager.checkForUpdates(versionName)
+                delay(180_000L)
+            }
         }
 
         val serviceIntent = Intent(this, KioskForegroundService::class.java)

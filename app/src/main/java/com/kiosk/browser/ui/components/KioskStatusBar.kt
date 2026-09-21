@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.telephony.TelephonyManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -177,8 +178,25 @@ fun KioskStatusBar(
         label = "itemPadding"
     )
 
+    // Анимация пульсации при наличии обновления
+    val hasUpdate = updateVersion != null || updateProgress != null || isInstallingUpdate
+    val updatePulse = rememberInfiniteTransition(label = "updatePulse")
+    val updateGlowAlpha by updatePulse.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "updateGlowAlpha"
+    )
+
     val animatedBorderColor by animateColorAsState(
-        targetValue = if (isExpanded) NeonCyan else Color(0x3300F0FF),
+        targetValue = when {
+            hasUpdate   -> NeonGreen.copy(alpha = updateGlowAlpha)
+            isExpanded  -> NeonCyan
+            else        -> Color(0x3300F0FF)
+        },
         label = "borderColor"
     )
 
@@ -382,74 +400,48 @@ fun KioskStatusBar(
             }
         }
 
-        // 5. Индикатор обновления (OTA)
-        if (updateVersion != null || updateProgress != null || isInstallingUpdate) {
+        // 5. Заметный индикатор обновления в панели (OTA)
+        if (hasUpdate) {
             val badgeColor = when {
                 isInstallingUpdate     -> NeonOrange
                 updateProgress != null -> NeonCyan
                 else                   -> NeonGreen
             }
-            Box(
+            val badgeText = when {
+                isInstallingUpdate     -> "УСТАНОВКА..."
+                updateProgress != null -> "$updateProgress%"
+                else                   -> "ОБНОВЛЕНИЕ v$updateVersion"
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = badgeColor.copy(alpha = 0.2f + updateGlowAlpha * 0.25f),
+                border = BorderStroke(1.5.dp, badgeColor.copy(alpha = updateGlowAlpha)),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (isExpanded) badgeColor.copy(alpha = 0.15f) else Color.Transparent)
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable {
                         notifyInteraction()
                         onUpdateClick?.invoke()
                     }
-                    .padding(itemPadding),
-                contentAlignment = Alignment.Center
             ) {
-                if (isVertical) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(1.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SystemUpdate,
-                            contentDescription = "Update",
-                            tint = badgeColor,
-                            modifier = Modifier.size(iconSize)
-                        )
-                        if (isExpanded) {
-                            Text(
-                                text = when {
-                                    isInstallingUpdate     -> "УСТВ"
-                                    updateProgress != null -> "$updateProgress%"
-                                    else                   -> "v$updateVersion"
-                                },
-                                color = badgeColor,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SystemUpdate,
-                            contentDescription = "Update",
-                            tint = badgeColor,
-                            modifier = Modifier.size(iconSize)
-                        )
-                        if (isExpanded) {
-                            Text(
-                                text = when {
-                                    isInstallingUpdate     -> "УСТВ..."
-                                    updateProgress != null -> "$updateProgress%"
-                                    else                   -> "↑ v$updateVersion"
-                                },
-                                color = badgeColor,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isInstallingUpdate) Icons.Default.CloudDownload else Icons.Default.SystemUpdate,
+                        contentDescription = "Update Available",
+                        tint = badgeColor,
+                        modifier = Modifier.size(if (isExpanded) 18.dp else 14.dp)
+                    )
+                    Text(
+                        text = badgeText,
+                        color = badgeColor,
+                        fontSize = if (isExpanded) 11.sp else 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
             }
         }

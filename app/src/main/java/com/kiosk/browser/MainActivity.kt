@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
 
     private val _shouldPromptLauncher = MutableStateFlow(false)
     val shouldPromptLauncher: StateFlow<Boolean> = _shouldPromptLauncher.asStateFlow()
+    private var hasPromptedLauncher = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -285,12 +286,6 @@ class MainActivity : ComponentActivity() {
                         if (shouldPrompt) {
                             showLauncherPrompt = true
                             _shouldPromptLauncher.value = false
-                        }
-                    }
-
-                    LaunchedEffect(Unit) {
-                        if (!deviceOwnerManager.isDefaultLauncher()) {
-                            showLauncherPrompt = true
                         }
                     }
 
@@ -500,6 +495,7 @@ class MainActivity : ComponentActivity() {
      * Сворачивание Kiosk Browser и принудительный переход на рабочий стол (One UI / системный лаунчер)
      */
     fun exitToHomeScreen() {
+        hasPromptedLauncher = false
         exitKioskMode()
         try {
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
@@ -600,8 +596,9 @@ class MainActivity : ComponentActivity() {
                 startLockTask()
             } catch (_: Exception) {}
         }
-        // Если Kiosk не является главным лаунчером - запрашиваем выбор при повторном заходе
-        if (!deviceOwnerManager.isDefaultLauncher()) {
+        // Запрашиваем выбор лаунчера строго 1 раз при входе в приложение
+        if (!hasPromptedLauncher && !deviceOwnerManager.isDefaultLauncher()) {
+            hasPromptedLauncher = true
             _shouldPromptLauncher.value = true
         }
         val versionName = runCatching {
@@ -610,6 +607,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             updateManager.checkForUpdates(versionName)
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Когда приложение полностью свернуто в фон, сбрасываем флаг для следующего входа
+        hasPromptedLauncher = false
     }
 
     fun controlScreen(turnOn: Boolean) {

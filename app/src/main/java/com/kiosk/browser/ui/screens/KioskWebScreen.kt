@@ -7,9 +7,13 @@ import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,8 +33,10 @@ import com.kiosk.browser.core.webview.KioskWebViewClient
 import com.kiosk.browser.core.webview.UrlFilterManager
 import com.kiosk.browser.ui.components.KioskStatusBar
 import com.kiosk.browser.ui.components.SecretTapOverlay
-import com.kiosk.browser.ui.theme.NeonCyan
+import com.kiosk.browser.ui.components.WifiControlDialog
+import com.kiosk.browser.ui.theme.*
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -46,6 +52,22 @@ fun KioskWebScreen(
 
     var loadProgress by remember { mutableStateOf(0) }
     var pendingPasswordPrompt by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+    var networkErrorMessage by remember { mutableStateOf<String?>(null) }
+    var retryCountDown by remember { mutableIntStateOf(5) }
+    var showWifiSettingsDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(networkErrorMessage) {
+        if (networkErrorMessage != null) {
+            retryCountDown = 5
+            while (retryCountDown > 0 && networkErrorMessage != null) {
+                delay(1000)
+                retryCountDown--
+            }
+            if (networkErrorMessage != null) {
+                mainActivity.currentWebView?.reload()
+            }
+        }
+    }
 
     // Защита от выгорания OLED дисплея
     val pixelShiftAnim = rememberInfiniteTransition(label = "pixelShift")
@@ -159,6 +181,14 @@ fun KioskWebScreen(
                     onCrashRecover = { webView.post { webView.loadUrl(config.startUrl) } },
                     onPageLoaded = { _ ->
                         swipeRefresh.isRefreshing = false
+                        networkErrorMessage = null
+                    },
+                    onNetworkError = { errorCode, description, _ ->
+                        swipeRefresh.isRefreshing = false
+                        networkErrorMessage = if (description.isNotBlank()) description else "Сетевая ошибка ($errorCode)"
+                    },
+                    onPageStartedLoading = {
+                        // При старте загрузки
                     }
                 )
 
@@ -338,6 +368,126 @@ fun KioskWebScreen(
                     }
                 }
             )
+        }
+
+        // ── Полноэкранный кибер-оверлей при потере связи с сервером ──
+        if (networkErrorMessage != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xF2070D18)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .border(1.dp, NeonOrange.copy(alpha = 0.8f), RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = CyberCard),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Анимированная иконка отсутствия сети
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .background(NeonOrange.copy(alpha = 0.15f), RoundedCornerShape(36.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WifiOff,
+                                contentDescription = null,
+                                tint = NeonOrange,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "СВЯЗЬ С СЕРВЕРОМ ПОТЕРЯНА",
+                                color = NeonOrange,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = networkErrorMessage ?: "Не удалось загрузить веб-страницу",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        // Таймер обратного отсчета
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .background(Color(0xFF0D1525), RoundedCornerShape(8.dp))
+                                .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                progress = (retryCountDown / 5f),
+                                modifier = Modifier.size(16.dp),
+                                color = NeonCyan,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = if (retryCountDown > 0) "Автоповтор через $retryCountDown сек..." else "Повторное подключение...",
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        // Кнопки действий
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    retryCountDown = 5
+                                    mainActivity.currentWebView?.reload()
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = CyberBlack, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Повторить", color = CyberBlack, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = { showWifiSettingsDialog = true },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                                border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Сеть / Wi-Fi", fontSize = 13.sp)
+                            }
+                        }
+
+                        TextButton(onClick = onOpenSettingsRequested) {
+                            Text("Открыть настройки Kiosk", color = TextMuted, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showWifiSettingsDialog) {
+            WifiControlDialog(onDismiss = { showWifiSettingsDialog = false })
         }
     }
 }

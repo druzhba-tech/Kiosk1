@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.UserManager
 
@@ -206,6 +207,56 @@ class DeviceOwnerManager(private val context: Context) {
         }
     }
 
+    fun setPreferredLauncher(packageName: String, activityName: String) {
+        if (!isDeviceOwner) return
+        try {
+            // Очищаем текущий Kiosk
+            dpm.clearPackagePersistentPreferredActivities(adminComponent, context.packageName)
+            // Очищаем целевой перед повторным назначением
+            dpm.clearPackagePersistentPreferredActivities(adminComponent, packageName)
+
+            val filter = android.content.IntentFilter(android.content.Intent.ACTION_MAIN).apply {
+                addCategory(android.content.Intent.CATEGORY_HOME)
+                addCategory(android.content.Intent.CATEGORY_DEFAULT)
+            }
+            val targetComponent = ComponentName(packageName, activityName)
+            dpm.addPersistentPreferredActivity(adminComponent, filter, targetComponent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun clearDefaultLauncher() {
+        if (!isDeviceOwner) return
+        try {
+            dpm.clearPackagePersistentPreferredActivities(adminComponent, context.packageName)
+            val current = getCurrentDefaultLauncher()
+            if (current != null && current.packageName != context.packageName) {
+                dpm.clearPackagePersistentPreferredActivities(adminComponent, current.packageName)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun getCurrentDefaultLauncher(): ComponentName? {
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+            addCategory(android.content.Intent.CATEGORY_HOME)
+        }
+        val resolveInfo = context.packageManager.resolveActivity(
+            intent,
+            PackageManager.MATCH_DEFAULT_ONLY
+        )
+        val pkg = resolveInfo?.activityInfo?.packageName
+        // Если "android" или ResolverActivity - это системный диалог выбора, а не конкретный лаунчер
+        if (pkg == null || pkg == "android" || pkg.contains("resolver", ignoreCase = true)) {
+            return null
+        }
+        return resolveInfo.activityInfo?.let {
+            ComponentName(it.packageName, it.name)
+        }
+    }
+
     fun isDefaultLauncher(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
@@ -213,14 +264,45 @@ class DeviceOwnerManager(private val context: Context) {
                 return roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)
             }
         }
+        val current = getCurrentDefaultLauncher()
+        return current?.packageName == context.packageName
+    }
+
+    fun getInstalledLaunchers(): List<LauncherAppInfo> {
+        val pm = context.packageManager
         val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
             addCategory(android.content.Intent.CATEGORY_HOME)
         }
-        val resolveInfo = context.packageManager.resolveActivity(
-            intent,
-            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
-        )
-        return resolveInfo?.activityInfo?.packageName == context.packageName
+        val resolveList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        }
+
+        val currentDefault = getCurrentDefaultLauncher()
+
+        return resolveList.mapNotNull { resolveInfo ->
+            val activityInfo = resolveInfo.activityInfo ?: return@mapNotNull null
+            val pkg = activityInfo.packageName
+            // Исключаем системный резолвер выбора
+            if (pkg == "android" || pkg.contains("resolver", ignoreCase = true)) return@mapNotNull null
+
+            val label = runCatching { resolveInfo.loadLabel(pm).toString() }.getOrNull()?.ifBlank { pkg } ?: pkg
+            val icon = runCatching { resolveInfo.loadIcon(pm) }.getOrNull()
+            val isDefault = currentDefault?.packageName == pkg
+            val isKiosk = pkg == context.packageName
+
+            LauncherAppInfo(
+                label = label,
+                packageName = pkg,
+                activityName = activityInfo.name,
+                icon = icon,
+                isCurrentDefault = isDefault,
+                isKiosk = isKiosk
+            )
+        }.distinctBy { it.packageName }
+        .sortedWith(compareByDescending<LauncherAppInfo> { it.isKiosk }.thenBy { it.label.lowercase() })
     }
 
     fun requestDefaultLauncher(activity: android.app.Activity) {
@@ -229,7 +311,10 @@ class DeviceOwnerManager(private val context: Context) {
             android.widget.Toast.makeText(activity, "Kiosk установлен главным лаунчером", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
+        openHomeSettings(activity)
+    }
 
+    fun openHomeSettings(activity: android.app.Activity) {
         try {
             activity.stopLockTask()
         } catch (_: Exception) {}
@@ -237,15 +322,13 @@ class DeviceOwnerManager(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = activity.getSystemService(android.app.role.RoleManager::class.java)
             if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
-                if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
-                    val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
-                    try {
-                        @Suppress("DEPRECATION")
-                        activity.startActivityForResult(intent, 1001)
-                        return
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                try {
+                    @Suppress("DEPRECATION")
+                    activity.startActivityForResult(intent, 1001)
+                    return
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -280,3 +363,12 @@ class DeviceOwnerManager(private val context: Context) {
         }
     }
 }
+
+data class LauncherAppInfo(
+    val label: String,
+    val packageName: String,
+    val activityName: String,
+    val icon: Drawable?,
+    val isCurrentDefault: Boolean,
+    val isKiosk: Boolean
+)

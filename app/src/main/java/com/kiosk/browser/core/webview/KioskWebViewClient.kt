@@ -16,7 +16,9 @@ class KioskWebViewClient(
     private val isBlockCallsAndSms: () -> Boolean = { true },
     private val isPreventZoom: () -> Boolean = { true },
     private val onCrashRecover: () -> Unit,
-    private val onPageLoaded: (String) -> Unit
+    private val onPageLoaded: (String) -> Unit,
+    private val onNetworkError: ((errorCode: Int, description: String, failingUrl: String) -> Unit)? = null,
+    private val onPageStartedLoading: (() -> Unit)? = null
 ) : WebViewClient() {
 
     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -62,10 +64,36 @@ class KioskWebViewClient(
 
     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
         super.onReceivedError(view, request, error)
+        val isMainFrame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            request?.isForMainFrame ?: true
+        } else {
+            true
+        }
+        if (isMainFrame) {
+            val errorCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                error?.errorCode ?: ERROR_UNKNOWN
+            } else {
+                ERROR_UNKNOWN
+            }
+            val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                error?.description?.toString() ?: "Сетевая ошибка"
+            } else {
+                "Сетевая ошибка"
+            }
+            val failingUrl = request?.url?.toString() ?: view?.url ?: ""
+            onNetworkError?.invoke(errorCode, description, failingUrl)
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+        super.onReceivedError(view, errorCode, description, failingUrl)
+        onNetworkError?.invoke(errorCode, description ?: "Сетевая ошибка", failingUrl ?: "")
     }
 
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         super.onPageStarted(view, url, favicon)
+        onPageStartedLoading?.invoke()
     }
 
     override fun onPageFinished(view: WebView?, url: String?) {

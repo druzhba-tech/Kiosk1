@@ -33,6 +33,7 @@ import com.kiosk.browser.core.security.PasswordManager
 import com.kiosk.browser.core.update.UpdateState
 import com.kiosk.browser.data.model.KioskConfig
 import com.kiosk.browser.ui.components.AppPickerDialog
+import com.kiosk.browser.ui.components.LauncherPickerDialog
 import com.kiosk.browser.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -86,6 +87,12 @@ fun SettingsScreen(
     var preventZoom by remember { mutableStateOf(currentConfig.preventZoom) }
     var enforceMinVolume by remember { mutableStateOf(currentConfig.enforceMinOrderVolume) }
 
+    var showLauncherPicker by remember { mutableStateOf(false) }
+    var preferredLauncherPackage by remember { mutableStateOf(currentConfig.preferredLauncherPackage) }
+    var defaultLauncherComponent by remember {
+        mutableStateOf(mainActivity.deviceOwnerManager.getCurrentDefaultLauncher())
+    }
+
     val coroutineScope = rememberCoroutineScope()
     val packageInfo = remember {
         runCatching {
@@ -107,6 +114,7 @@ fun SettingsScreen(
                 startUrl = startUrl,
                 primaryMode = primaryMode,
                 primaryAppPackage = primaryAppPackage,
+                preferredLauncherPackage = preferredLauncherPackage,
                 isFirstLaunchCompleted = isFirstLaunchCompleted,
                 pinCode = pinCode,
                 idleTimeoutSeconds = idleTimeout.toIntOrNull() ?: 120,
@@ -353,52 +361,117 @@ fun SettingsScreen(
             }
 
             // ── Карточка: Назначение Домашним экраном (Лаунчером) по умолчанию ──
-            val isDefaultHome = remember { mainActivity.deviceOwnerManager.isDefaultLauncher() }
+            val isKioskDefault = defaultLauncherComponent?.packageName == context.packageName
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(
                         width = 1.dp,
-                        color = if (isDefaultHome) NeonGreen.copy(alpha = 0.6f) else NeonCyan.copy(alpha = 0.4f),
+                        color = when {
+                            isKioskDefault -> NeonGreen.copy(alpha = 0.7f)
+                            defaultLauncherComponent != null -> NeonCyan.copy(alpha = 0.6f)
+                            else -> NeonOrange.copy(alpha = 0.6f)
+                        },
                         shape = RoundedCornerShape(12.dp)
                     ),
                 colors = CardDefaults.cardColors(containerColor = CyberCard)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Домашний экран (Лаунчер)",
-                            color = TextWhite,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (isDefaultHome) "Kiosk уже назначен главным экраном устройства" else "Сделать Kiosk постоянным домашним экраном",
-                            color = if (isDefaultHome) NeonGreen else TextMuted,
-                            fontSize = 12.sp
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Home,
+                                contentDescription = null,
+                                tint = if (isKioskDefault) NeonGreen else NeonCyan,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "ДОМАШНИЙ ЭКРАН (ЛАУНЧЕР)",
+                                    color = if (isKioskDefault) NeonGreen else NeonCyan,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = when {
+                                        isKioskDefault -> "Kiosk Browser активен по умолчанию"
+                                        defaultLauncherComponent != null -> "Активен: ${defaultLauncherComponent?.packageName}"
+                                        else -> "Лаунчер по умолчанию не задан"
+                                    },
+                                    color = TextWhite,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        if (isKioskDefault) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Активен",
+                                tint = NeonGreen,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
-                    if (!isDefaultHome) {
+
+                    Text(
+                        text = when {
+                            isKioskDefault -> "Нажатие кнопки Home и системные события запускают Kiosk Browser."
+                            defaultLauncherComponent != null -> "Кнопка Home открывает выбранный рабочий стол. Kiosk не блокирует системный лаунчер."
+                            else -> "При нажатии кнопки Home Android предложит выбрать лаунчер."
+                        },
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Кнопка выбора лаунчера
                         Button(
-                            onClick = { mainActivity.deviceOwnerManager.requestDefaultLauncher(mainActivity) },
+                            onClick = { showLauncherPicker = true },
                             colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                            modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Назначить", color = CyberBlack, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Icon(Icons.Default.Apps, contentDescription = null, tint = CyberBlack, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Выбрать лаунчер", color = CyberBlack, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Активен",
-                            tint = NeonGreen,
-                            modifier = Modifier.size(24.dp)
-                        )
+
+                        // Если Kiosk не главный - быстрая кнопка вернуть Kiosk
+                        if (!isKioskDefault) {
+                            OutlinedButton(
+                                onClick = {
+                                    preferredLauncherPackage = ""
+                                    mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = "") }
+                                    mainActivity.deviceOwnerManager.setDefaultLauncher(true)
+                                    defaultLauncherComponent = mainActivity.deviceOwnerManager.getCurrentDefaultLauncher()
+                                    Toast.makeText(context, "Kiosk назначен главным лаунчером", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonGreen),
+                                border = BorderStroke(1.dp, NeonGreen.copy(alpha = 0.7f)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Вернуть Kiosk", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -987,6 +1060,43 @@ fun SettingsScreen(
         }
     }
 
+    if (showLauncherPicker) {
+        LauncherPickerDialog(
+            mainActivity = mainActivity,
+            onLauncherSelected = { selectedApp ->
+                if (selectedApp.isKiosk) {
+                    preferredLauncherPackage = ""
+                    mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = "") }
+                    mainActivity.deviceOwnerManager.setDefaultLauncher(true)
+                    Toast.makeText(context, "Kiosk установлен лаунчером по умолчанию", Toast.LENGTH_SHORT).show()
+                } else {
+                    preferredLauncherPackage = selectedApp.packageName
+                    mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = selectedApp.packageName) }
+                    if (mainActivity.deviceOwnerManager.isDeviceOwner) {
+                        mainActivity.deviceOwnerManager.setPreferredLauncher(selectedApp.packageName, selectedApp.activityName)
+                        Toast.makeText(context, "${selectedApp.label} установлен лаунчером по умолчанию", Toast.LENGTH_SHORT).show()
+                    } else {
+                        mainActivity.deviceOwnerManager.openHomeSettings(mainActivity)
+                    }
+                }
+                defaultLauncherComponent = mainActivity.deviceOwnerManager.getCurrentDefaultLauncher()
+                showLauncherPicker = false
+            },
+            onResetDefault = {
+                preferredLauncherPackage = "NONE"
+                mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = "NONE") }
+                mainActivity.deviceOwnerManager.clearDefaultLauncher()
+                defaultLauncherComponent = mainActivity.deviceOwnerManager.getCurrentDefaultLauncher()
+                Toast.makeText(context, "Лаунчер по умолчанию сброшен", Toast.LENGTH_SHORT).show()
+                showLauncherPicker = false
+            },
+            onDismiss = {
+                defaultLauncherComponent = mainActivity.deviceOwnerManager.getCurrentDefaultLauncher()
+                showLauncherPicker = false
+            }
+        )
+    }
+
     if (showAppPicker) {
         AppPickerDialog(
             selectedPackages = allowedApps,
@@ -995,6 +1105,17 @@ fun SettingsScreen(
                 showAppPicker = false
             },
             onDismiss = { showAppPicker = false }
+        )
+    }
+
+    if (showPrimaryAppPicker) {
+        AppPickerDialog(
+            selectedPackages = if (primaryAppPackage.isNotBlank()) listOf(primaryAppPackage) else emptyList(),
+            onConfirm = { selected: List<String> ->
+                primaryAppPackage = selected.firstOrNull() ?: ""
+                showPrimaryAppPicker = false
+            },
+            onDismiss = { showPrimaryAppPicker = false }
         )
     }
 }

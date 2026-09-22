@@ -13,6 +13,7 @@ data class KioskConfig(
     val isSingleAppMode: Boolean = true,
     val pinCode: String = "1234",
     val emergencyAdbKey: String = "SECRET_KIOSK_KEY_777",
+    val preferredLauncherPackage: String = "", // Пусто или com.kiosk.browser -> Kiosk по умолчанию. Иначе сторонний выбранный лаунчер
 
     // Экран, сон и заставка
     val keepScreenOn: Boolean = true,

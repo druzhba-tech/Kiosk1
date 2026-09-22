@@ -12,8 +12,8 @@ android {
         applicationId = "com.kiosk.browser"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "1.0.14"
+        versionCode = 17
+        versionName = "1.0.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

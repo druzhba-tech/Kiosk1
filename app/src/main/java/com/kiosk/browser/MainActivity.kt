@@ -267,12 +267,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    val currentCfg = configRepository.getConfig()
+                    val isKioskDesired = currentCfg.preferredLauncherPackage.isEmpty() || currentCfg.preferredLauncherPackage == packageName
                     var showLauncherPrompt by remember {
-                        mutableStateOf(!deviceOwnerManager.isDefaultLauncher() && !deviceOwnerManager.isDeviceOwner)
+                        mutableStateOf(isKioskDesired && !deviceOwnerManager.isDefaultLauncher() && !deviceOwnerManager.isDeviceOwner)
                     }
 
                     LaunchedEffect(Unit) {
-                        if (deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
+                        val cfg = configRepository.getConfig()
+                        val wantsKiosk = cfg.preferredLauncherPackage.isEmpty() || cfg.preferredLauncherPackage == packageName
+                        if (wantsKiosk && deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
                             deviceOwnerManager.setDefaultLauncher(true)
                         }
                     }
@@ -352,7 +356,10 @@ class MainActivity : ComponentActivity() {
                     blockTethering = config.blockTethering,
                     whitelistedPackages = allowed
                 )
-                deviceOwnerManager.setDefaultLauncher(true)
+                val isKioskDesired = config.preferredLauncherPackage.isEmpty() || config.preferredLauncherPackage == packageName
+                if (isKioskDesired) {
+                    deviceOwnerManager.setDefaultLauncher(true)
+                }
             }
             checkAndEnforceMinVolume()
             try {
@@ -471,10 +478,11 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         enableImmersiveMode()
-        if (deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
+        val config = configRepository.getConfig()
+        val isKioskDesired = config.preferredLauncherPackage.isEmpty() || config.preferredLauncherPackage == packageName
+        if (isKioskDesired && deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
             deviceOwnerManager.setDefaultLauncher(true)
         }
-        val config = configRepository.getConfig()
         if (config.isKioskEnabled) {
             try {
                 startLockTask()

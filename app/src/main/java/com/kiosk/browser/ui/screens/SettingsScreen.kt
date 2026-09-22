@@ -177,6 +177,20 @@ fun SettingsScreen(
                     }
                 },
                 actions = {
+                    OutlinedButton(
+                        onClick = {
+                            mainActivity.exitToHomeScreen()
+                            onClose()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonOrange),
+                        border = BorderStroke(1.dp, NeonOrange.copy(alpha = 0.7f)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("ВЫЙТИ В РАБОЧИЙ СТОЛ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = { saveAll() },
                         colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
@@ -349,7 +363,13 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = isKiosk,
-                        onCheckedChange = { isKiosk = it },
+                        onCheckedChange = { checked ->
+                            isKiosk = checked
+                            if (!checked) {
+                                mainActivity.exitKioskMode()
+                                Toast.makeText(context, "Режим киоска отключен. Навигация разблокирована.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = CyberBlack,
                             checkedTrackColor = NeonGreen,
@@ -471,6 +491,21 @@ fun SettingsScreen(
                             ) {
                                 Text("Вернуть Kiosk", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        // Кнопка свернуть Kiosk и выйти на рабочий стол
+                        OutlinedButton(
+                            onClick = {
+                                mainActivity.exitToHomeScreen()
+                                onClose()
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonOrange),
+                            border = BorderStroke(1.dp, NeonOrange.copy(alpha = 0.7f)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = null, tint = NeonOrange, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("В рабочий стол", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1066,21 +1101,39 @@ fun SettingsScreen(
             onLauncherSelected = { selectedApp ->
                 if (selectedApp.isKiosk) {
                     preferredLauncherPackage = ""
-                    mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = "") }
+                    isKiosk = true
+                    mainActivity.configRepository.updateConfig {
+                        it.copy(
+                            preferredLauncherPackage = "",
+                            isKioskEnabled = true
+                        )
+                    }
                     mainActivity.deviceOwnerManager.setDefaultLauncher(true)
+                    mainActivity.applyConfigUpdates()
                     Toast.makeText(context, "Kiosk установлен лаунчером по умолчанию", Toast.LENGTH_SHORT).show()
                 } else {
                     preferredLauncherPackage = selectedApp.packageName
-                    mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = selectedApp.packageName) }
-                    try {
-                        mainActivity.stopLockTask()
-                    } catch (_: Exception) {}
+                    isKiosk = false
+                    mainActivity.configRepository.updateConfig {
+                        it.copy(
+                            preferredLauncherPackage = selectedApp.packageName,
+                            isKioskEnabled = false
+                        )
+                    }
+                    mainActivity.exitKioskMode()
+
                     if (mainActivity.deviceOwnerManager.isDeviceOwner) {
                         mainActivity.deviceOwnerManager.setPreferredLauncher(selectedApp.packageName, selectedApp.activityName)
-                        Toast.makeText(context, "${selectedApp.label} установлен лаунчером по умолчанию", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "${selectedApp.label} установлен. Переход на рабочий стол...", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(context, "Выберите ${selectedApp.label} в настройках Android", Toast.LENGTH_LONG).show()
                         mainActivity.deviceOwnerManager.openHomeSettings(mainActivity)
+                    }
+
+                    coroutineScope.launch {
+                        delay(600L)
+                        mainActivity.exitToHomeScreen()
+                        onClose()
                     }
                 }
                 defaultLauncherComponent = mainActivity.deviceOwnerManager.getCurrentDefaultLauncher()
@@ -1088,10 +1141,17 @@ fun SettingsScreen(
             },
             onResetDefault = {
                 preferredLauncherPackage = "NONE"
-                mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = "NONE") }
+                isKiosk = false
+                mainActivity.configRepository.updateConfig {
+                    it.copy(
+                        preferredLauncherPackage = "NONE",
+                        isKioskEnabled = false
+                    )
+                }
+                mainActivity.exitKioskMode()
                 mainActivity.deviceOwnerManager.clearDefaultLauncher()
                 defaultLauncherComponent = mainActivity.deviceOwnerManager.getCurrentDefaultLauncher()
-                Toast.makeText(context, "Лаунчер по умолчанию сброшен", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Лаунчер по умолчанию сброшен. Свободный доступ.", Toast.LENGTH_SHORT).show()
                 showLauncherPicker = false
             },
             onDismiss = {

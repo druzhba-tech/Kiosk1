@@ -210,6 +210,27 @@ class DeviceOwnerManager(private val context: Context) {
     fun setPreferredLauncher(packageName: String, activityName: String) {
         if (!isDeviceOwner) return
         try {
+            // Разблокируем статус бар и панель навигации
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                dpm.setStatusBarDisabled(adminComponent, false)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                dpm.setLockTaskFeatures(
+                    adminComponent,
+                    DevicePolicyManager.LOCK_TASK_FEATURE_HOME or
+                    DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW or
+                    DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS or
+                    DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                )
+            }
+
+            // Добавляем выбранный лаунчер в список разрешенных пакетов
+            val currentPackages = dpm.getLockTaskPackages(adminComponent).toMutableList()
+            if (!currentPackages.contains(packageName)) {
+                currentPackages.add(packageName)
+                dpm.setLockTaskPackages(adminComponent, currentPackages.toTypedArray())
+            }
+
             // Очищаем текущий Kiosk
             dpm.clearPackagePersistentPreferredActivities(adminComponent, context.packageName)
             // Очищаем целевой перед повторным назначением
@@ -240,6 +261,9 @@ class DeviceOwnerManager(private val context: Context) {
             val current = getCurrentDefaultLauncher()
             if (current != null && current.packageName != context.packageName) {
                 dpm.clearPackagePersistentPreferredActivities(adminComponent, current.packageName)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                dpm.setStatusBarDisabled(adminComponent, false)
             }
         } catch (e: Exception) {
             e.printStackTrace()

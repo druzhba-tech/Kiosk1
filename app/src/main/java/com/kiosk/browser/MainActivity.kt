@@ -180,12 +180,17 @@ class MainActivity : ComponentActivity() {
                 val batteryLevel by batteryTracker.batteryLevel.collectAsState()
                 val isCharging by batteryTracker.isCharging.collectAsState()
 
-                BackHandler(enabled = config.isKioskEnabled) {
-                }
-
                 var showPinDialog by remember { mutableStateOf(false) }
                 var showSettings by remember { mutableStateOf(false) }
                 var isWebMode by remember { mutableStateOf(config.isSingleAppMode) }
+
+                BackHandler(enabled = showPinDialog || showSettings || config.isKioskEnabled) {
+                    when {
+                        showPinDialog -> showPinDialog = false
+                        showSettings -> showSettings = false
+                        config.isKioskEnabled -> { /* Блокировка выхода в режиме киоска */ }
+                    }
+                }
 
                 LaunchedEffect(config.isSingleAppMode) {
                     if (config.isSingleAppMode) {
@@ -329,6 +334,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun enableImmersiveMode() {
+        val config = runCatching { configRepository.getConfig() }.getOrNull()
+        if (config != null && !config.isKioskEnabled) {
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            val controller = WindowInsetsControllerCompat(window, window.decorView)
+            controller.show(WindowInsetsCompat.Type.systemBars())
+            return
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -340,7 +352,11 @@ class MainActivity : ComponentActivity() {
         val config = configRepository.getConfig()
 
         powerHelper.setKeepScreenOn(this, config.keepScreenOn)
-        powerHelper.acquireLocks()
+        if (config.keepScreenOn) {
+            powerHelper.acquireLocks()
+        } else {
+            powerHelper.releaseLocks()
+        }
         idleWatchdog.updateTimeoutSeconds(config.idleTimeoutSeconds, config.screensaverEnabled)
 
         motionTracker.isAntiTheftEnabled = config.antiTheftAlarmEnabled
@@ -366,6 +382,15 @@ class MainActivity : ComponentActivity() {
                 startLockTask()
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        } else {
+            try {
+                stopLockTask()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            if (deviceOwnerManager.isDeviceOwner) {
+                deviceOwnerManager.clearKioskPolicies()
             }
         }
     }
@@ -403,6 +428,30 @@ class MainActivity : ComponentActivity() {
         powerHelper.setKeepScreenOn(this, false)
         powerHelper.releaseLocks()
         configRepository.updateConfig { it.copy(isKioskEnabled = false) }
+        runOnUiThread {
+            enableImmersiveMode()
+        }
+    }
+
+    /**
+     * Сворачивание Kiosk Browser и принудительный переход на рабочий стол (One UI / системный лаунчер)
+     */
+    fun exitToHomeScreen() {
+        exitKioskMode()
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            }
+            startActivity(homeIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        try {
+            moveTaskToBack(true)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     /**

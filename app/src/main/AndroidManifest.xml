@@ -73,7 +73,7 @@
             </intent-filter>
 
             <!-- Системный лаунчер (Главный экран по умолчанию) -->
-            <intent-filter priority="1000">
+            <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -88,7 +88,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Device Admin Receiver РґР»СЏ Device Owner Рё РїРѕР»РёС‚РёРє Р±Р»РѕРєРёСЂРѕРІРєРё -->
+        <!-- Device Admin Receiver для Device Owner и политик блокировки -->
         <receiver
             android:name=".admin.KioskDeviceAdminReceiver"
             android:description="@string/device_admin_description"
@@ -105,7 +105,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- РђРІР°СЂРёР№РЅС‹Р№ ADB BroadcastReceiver РґР»СЏ РІС‹С…РѕРґР° РёР· РєРёРѕСЃРєР° СЂР°Р·СЂР°Р±РѕС‚С‡РёРєРѕРј -->
+        <!-- Аварийный ADB BroadcastReceiver для выхода из киоска разработчиком -->
         <receiver
             android:name=".core.security.EmergencyBroadcastReceiver"
             android:exported="true">
@@ -116,14 +116,17 @@
             </intent-filter>
         </receiver>
 
-        <!-- Р РµСЃРёРІРµСЂ Р°РІС‚РѕР·Р°РїСѓСЃРєР° РїСЂРё РІРєР»СЋС‡РµРЅРёРё СѓСЃС‚СЂРѕР№СЃС‚РІР° -->
+        <!-- Ресивер автозапуска при включении устройства -->
         <receiver
             android:name=".core.power.BootReceiver"
             android:enabled="true"
-            android:exported="true">
-            <intent-filter>
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter priority="999">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

@@ -198,6 +198,13 @@ class DeviceOwnerManager(private val context: Context) {
             }
             val mainActivityComponent = ComponentName(context, "com.kiosk.browser.MainActivity")
             if (enable) {
+                // Очищаем старые привязки перед повторным назначением во избежание конфликтов PMS
+                dpm.clearPackagePersistentPreferredActivities(adminComponent, context.packageName)
+                val current = getCurrentDefaultLauncher()
+                if (current != null && current.packageName != context.packageName) {
+                    dpm.clearPackagePersistentPreferredActivities(adminComponent, current.packageName)
+                }
+
                 // Блокируем статус-бар и системную навигацию
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     dpm.setStatusBarDisabled(adminComponent, true)
@@ -309,14 +316,19 @@ class DeviceOwnerManager(private val context: Context) {
     }
 
     fun isDefaultLauncher(): Boolean {
+        val current = getCurrentDefaultLauncher()
+        if (current?.packageName == context.packageName) {
+            return true
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
             if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
-                return roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)
+                if (roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
+                    return true
+                }
             }
         }
-        val current = getCurrentDefaultLauncher()
-        return current?.packageName == context.packageName
+        return false
     }
 
     fun getInstalledLaunchers(): List<LauncherAppInfo> {

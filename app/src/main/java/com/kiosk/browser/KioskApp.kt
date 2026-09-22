@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Process
+import com.kiosk.browser.admin.DeviceOwnerManager
 import com.kiosk.browser.data.repository.ConfigRepository
 import java.io.File
 import java.io.PrintWriter
@@ -27,6 +28,19 @@ class KioskApp : Application() {
         setupCrashWatchdog()
         configRepository = ConfigRepository(this)
         createNotificationChannel()
+
+        // Восстановление Kiosk лаунчера по умолчанию при старте приложения / системы
+        try {
+            val config = configRepository.getConfig()
+            val isKioskDesired = config.isKioskEnabled &&
+                    (config.preferredLauncherPackage.isEmpty() || config.preferredLauncherPackage == packageName)
+            val dom = DeviceOwnerManager(this)
+            if (isKioskDesired && dom.isDeviceOwner && !dom.isDefaultLauncher()) {
+                dom.setDefaultLauncher(true)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     /**

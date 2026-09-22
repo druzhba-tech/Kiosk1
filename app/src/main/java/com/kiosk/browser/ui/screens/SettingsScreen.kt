@@ -1072,10 +1072,14 @@ fun SettingsScreen(
                 } else {
                     preferredLauncherPackage = selectedApp.packageName
                     mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = selectedApp.packageName) }
+                    try {
+                        mainActivity.stopLockTask()
+                    } catch (_: Exception) {}
                     if (mainActivity.deviceOwnerManager.isDeviceOwner) {
                         mainActivity.deviceOwnerManager.setPreferredLauncher(selectedApp.packageName, selectedApp.activityName)
                         Toast.makeText(context, "${selectedApp.label} установлен лаунчером по умолчанию", Toast.LENGTH_SHORT).show()
                     } else {
+                        Toast.makeText(context, "Выберите ${selectedApp.label} в настройках Android", Toast.LENGTH_LONG).show()
                         mainActivity.deviceOwnerManager.openHomeSettings(mainActivity)
                     }
                 }

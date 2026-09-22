@@ -75,11 +75,10 @@ jobs:
           name: Kiosk Browser v${{ steps.get_version.outputs.version }}
           body: |
             Обновление Kiosk Browser v${{ steps.get_version.outputs.version }}:
-            - Выбор лаунчера по умолчанию (Launcher Picker) из всех установленных на планшете в меню «Настройки»
-            - Сторож от падений (Crash Watchdog / Auto-Restart): автоматический мгновенный перезапуск приложения без показа системных ошибок
-            - Стилизованный оффлайн-экран при потере связи с сервером (Offline Error Screen) с обратным отсчетом 5 сек и быстрым переходом в Wi-Fi
-            - Управление домашним экраном через DevicePolicyManager (addPersistentPreferredActivity) и сохранение настроек лаунчера
-            - Исправление свайпа Pull-to-refresh, защита от случайного масштабирования и ночная тихая перезагрузка в 04:00
+            - Исправлена видимость сторонних лаунчеров (QUERY_ALL_PACKAGES и <queries> для CATEGORY_HOME): теперь диалог гарантированно видит все установленные рабочие столы (One UI, MIUI, Launcher3 и др.)
+            - Исправлен системный переход в настройки приложений по умолчанию (Settings.ACTION_HOME_SETTINGS) при смене лаунчера
+            - Добавлена разблокировка LockTask при переключении на сторонний рабочий стол
+            - Сторож от падений (Crash Watchdog) и стилизованный оффлайн-экран с автоповтором 5 сек
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

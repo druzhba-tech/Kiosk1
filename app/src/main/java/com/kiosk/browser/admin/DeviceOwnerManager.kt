@@ -215,12 +215,19 @@ class DeviceOwnerManager(private val context: Context) {
             // Очищаем целевой перед повторным назначением
             dpm.clearPackagePersistentPreferredActivities(adminComponent, packageName)
 
-            val filter = android.content.IntentFilter(android.content.Intent.ACTION_MAIN).apply {
-                addCategory(android.content.Intent.CATEGORY_HOME)
-                addCategory(android.content.Intent.CATEGORY_DEFAULT)
-            }
             val targetComponent = ComponentName(packageName, activityName)
-            dpm.addPersistentPreferredActivity(adminComponent, filter, targetComponent)
+            try {
+                val filter = android.content.IntentFilter(android.content.Intent.ACTION_MAIN).apply {
+                    addCategory(android.content.Intent.CATEGORY_HOME)
+                    addCategory(android.content.Intent.CATEGORY_DEFAULT)
+                }
+                dpm.addPersistentPreferredActivity(adminComponent, filter, targetComponent)
+            } catch (_: Exception) {
+                val simpleFilter = android.content.IntentFilter(android.content.Intent.ACTION_MAIN).apply {
+                    addCategory(android.content.Intent.CATEGORY_HOME)
+                }
+                dpm.addPersistentPreferredActivity(adminComponent, simpleFilter, targetComponent)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -311,10 +318,7 @@ class DeviceOwnerManager(private val context: Context) {
             android.widget.Toast.makeText(activity, "Kiosk установлен главным лаунчером", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
-        openHomeSettings(activity)
-    }
 
-    fun openHomeSettings(activity: android.app.Activity) {
         try {
             activity.stopLockTask()
         } catch (_: Exception) {}
@@ -322,16 +326,23 @@ class DeviceOwnerManager(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = activity.getSystemService(android.app.role.RoleManager::class.java)
             if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
-                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
-                try {
-                    @Suppress("DEPRECATION")
-                    activity.startActivityForResult(intent, 1001)
-                    return
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
+                    val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                    try {
+                        @Suppress("DEPRECATION")
+                        activity.startActivityForResult(intent, 1001)
+                        return
+                    } catch (_: Exception) {}
                 }
             }
         }
+        openHomeSettings(activity)
+    }
+
+    fun openHomeSettings(activity: android.app.Activity) {
+        try {
+            activity.stopLockTask()
+        } catch (_: Exception) {}
 
         val intents = listOf(
             android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS),

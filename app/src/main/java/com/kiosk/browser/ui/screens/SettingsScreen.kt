@@ -481,10 +481,22 @@ fun SettingsScreen(
                             OutlinedButton(
                                 onClick = {
                                     preferredLauncherPackage = ""
-                                    mainActivity.configRepository.updateConfig { it.copy(preferredLauncherPackage = "") }
-                                    mainActivity.deviceOwnerManager.setDefaultLauncher(true)
+                                    isKiosk = true
+                                    mainActivity.configRepository.updateConfig {
+                                        it.copy(
+                                            preferredLauncherPackage = "",
+                                            isKioskEnabled = true,
+                                            blockSystemNavigation = true
+                                        )
+                                    }
+                                    if (mainActivity.deviceOwnerManager.isDeviceOwner) {
+                                        mainActivity.deviceOwnerManager.setDefaultLauncher(true)
+                                    } else {
+                                        mainActivity.deviceOwnerManager.requestDefaultLauncher(mainActivity)
+                                    }
+                                    mainActivity.startKioskMode()
                                     defaultLauncherComponent = mainActivity.deviceOwnerManager.getCurrentDefaultLauncher()
-                                    Toast.makeText(context, "Kiosk назначен главным лаунчером", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Kiosk назначен главным лаунчером. Кнопки Назад, Домой и Недавние заблокированы.", Toast.LENGTH_LONG).show()
                                 },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonGreen),
                                 border = BorderStroke(1.dp, NeonGreen.copy(alpha = 0.7f)),
@@ -1106,12 +1118,17 @@ fun SettingsScreen(
                     mainActivity.configRepository.updateConfig {
                         it.copy(
                             preferredLauncherPackage = "",
-                            isKioskEnabled = true
+                            isKioskEnabled = true,
+                            blockSystemNavigation = true
                         )
                     }
-                    mainActivity.deviceOwnerManager.setDefaultLauncher(true)
-                    mainActivity.applyConfigUpdates()
-                    Toast.makeText(context, "Kiosk установлен лаунчером по умолчанию", Toast.LENGTH_SHORT).show()
+                    if (mainActivity.deviceOwnerManager.isDeviceOwner) {
+                        mainActivity.deviceOwnerManager.setDefaultLauncher(true)
+                    } else {
+                        mainActivity.deviceOwnerManager.requestDefaultLauncher(mainActivity)
+                    }
+                    mainActivity.startKioskMode()
+                    Toast.makeText(context, "Kiosk установлен лаунчером по умолчанию. Кнопки Назад, Домой и Недавние заблокированы.", Toast.LENGTH_LONG).show()
                 } else {
                     preferredLauncherPackage = selectedApp.packageName
                     isKiosk = false

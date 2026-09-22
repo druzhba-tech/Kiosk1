@@ -75,11 +75,11 @@ jobs:
           name: Kiosk Browser v${{ steps.get_version.outputs.version }}
           body: |
             Обновление Kiosk Browser v${{ steps.get_version.outputs.version }}:
-            - Мгновенный выход на рабочий стол (One UI, системный лаунчер): при выборе лаунчера Kiosk автоматически снимает все блокировки (LockTask, статус-бар, навигацию), перенаправляет на домашний экран и сворачивает Kiosk Browser
-            - Добавлены кнопки «Выйти в рабочий стол» в верхнюю панель настроек и в карточку управления лаунчером
-            - Мгновенное снятие блокировок при выключении тумблера «Режим киоска» в настройках
-            - Исправлена ветка отключения киоска в applyConfigUpdates() (теперь stopLockTask() и clearKioskPolicies() вызываются гарантированно)
-            - Package Visibility (QUERY_ALL_PACKAGES + CATEGORY_HOME), Crash Watchdog и экран потери сети сохранены
+            - Автоматический запрос выбора лаунчера по умолчанию при каждом повторном заходе в Kiosk Browser (если активен One UI / другой рабочий стол)
+            - Полная аппаратная и программная блокировка кнопок «Назад», «Домой» и «Недавние» (KEYCODE_APP_SWITCH) при выборе Kiosk
+            - Включение LOCK_TASK_FEATURE_NONE, setStatusBarDisabled и блокировка навигации при назначении Kiosk лаунчером по умолчанию
+            - Перехват попыток свернуть Kiosk через onUserLeaveHint() и закрытие шторки через ACTION_CLOSE_SYSTEM_DIALOGS
+            - Мгновенный выход на рабочий стол One UI из меню настроек и при выборе стороннего лаунчера
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

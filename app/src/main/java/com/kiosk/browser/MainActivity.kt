@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
     private val _isScreensaverActive = MutableStateFlow(false)
     val isScreensaverActive: StateFlow<Boolean> = _isScreensaverActive.asStateFlow()
 
+    private val _shouldPromptLauncher = MutableStateFlow(false)
+    val shouldPromptLauncher: StateFlow<Boolean> = _shouldPromptLauncher.asStateFlow()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         currentInstance = this
@@ -272,58 +275,103 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    val currentCfg = configRepository.getConfig()
-                    val isKioskDesired = currentCfg.preferredLauncherPackage.isEmpty() || currentCfg.preferredLauncherPackage == packageName
-                    var showLauncherPrompt by remember {
-                        mutableStateOf(isKioskDesired && !deviceOwnerManager.isDefaultLauncher() && !deviceOwnerManager.isDeviceOwner)
-                    }
+                    val shouldPrompt by shouldPromptLauncher.collectAsState()
+                    var showLauncherPrompt by remember { mutableStateOf(false) }
 
-                    LaunchedEffect(Unit) {
-                        val cfg = configRepository.getConfig()
-                        val wantsKiosk = cfg.preferredLauncherPackage.isEmpty() || cfg.preferredLauncherPackage == packageName
-                        if (wantsKiosk && deviceOwnerManager.isDeviceOwner && !deviceOwnerManager.isDefaultLauncher()) {
-                            deviceOwnerManager.setDefaultLauncher(true)
+                    LaunchedEffect(shouldPrompt) {
+                        if (shouldPrompt) {
+                            showLauncherPrompt = true
+                            _shouldPromptLauncher.value = false
                         }
                     }
 
-                    if (showLauncherPrompt) {
+                    LaunchedEffect(Unit) {
+                        if (!deviceOwnerManager.isDefaultLauncher()) {
+                            showLauncherPrompt = true
+                        }
+                    }
+
+                    if (showLauncherPrompt && !deviceOwnerManager.isDefaultLauncher()) {
                         AlertDialog(
                             onDismissRequest = { showLauncherPrompt = false },
                             containerColor = CyberCard,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.border(1.dp, NeonCyan.copy(alpha = 0.8f), RoundedCornerShape(16.dp)),
                             title = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Home, contentDescription = null, tint = NeonCyan)
+                                    Icon(Icons.Default.Security, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(26.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        "Лаунчер по умолчанию",
+                                        "ВЫБОР ЛАУНЧЕРА ПО УМОЛЧАНИЮ",
                                         color = NeonCyan,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
+                                        fontSize = 15.sp,
                                         letterSpacing = 1.sp
                                     )
                                 }
                             },
                             text = {
-                                Text(
-                                    "Сделайте Kiosk лаунчером по умолчанию, чтобы исключить запуск сторонних приложений в фоне.",
-                                    color = TextWhite,
-                                    fontSize = 13.sp
-                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        "Kiosk Browser сейчас не назначен главным экраном (активен One UI или другой лаунчер).",
+                                        color = TextWhite,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        "Включить Kiosk по умолчанию с полной блокировкой кнопок «Назад», «Домой» и «Недавние»?",
+                                        color = NeonGreen,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             },
                             confirmButton = {
                                 Button(
                                     onClick = {
                                         showLauncherPrompt = false
-                                        deviceOwnerManager.requestDefaultLauncher(this@MainActivity)
+                                        configRepository.updateConfig {
+                                            it.copy(
+                                                preferredLauncherPackage = "",
+                                                isKioskEnabled = true,
+                                                blockSystemNavigation = true
+                                            )
+                                        }
+                                        if (deviceOwnerManager.isDeviceOwner) {
+                                            deviceOwnerManager.setDefaultLauncher(true)
+                                        } else {
+                                            deviceOwnerManager.requestDefaultLauncher(this@MainActivity)
+                                        }
+                                        startKioskMode()
+                                        android.widget.Toast.makeText(
+                                            this@MainActivity,
+                                            "Kiosk установлен главным лаунчером. Кнопки Назад, Домой и Недавние заблокированы.",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
+                                    shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text("Сделать", color = CyberBlack, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = CyberBlack, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("ВКЛЮЧИТЬ КИОСК (БЛОКИРОВКА)", color = CyberBlack, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showLauncherPrompt = false }) {
-                                    Text("Позже", color = TextMuted)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            showLauncherPrompt = false
+                                            showSettings = true
+                                        },
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                                        border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Другой", fontSize = 11.sp)
+                                    }
+                                    TextButton(onClick = { showLauncherPrompt = false }) {
+                                        Text("Оставить One UI", color = TextMuted, fontSize = 11.sp)
+                                    }
                                 }
                             }
                         )
@@ -411,8 +459,20 @@ class MainActivity : ComponentActivity() {
     }
 
     fun startKioskMode() {
-        configRepository.updateConfig { it.copy(isKioskEnabled = true) }
+        configRepository.updateConfig {
+            it.copy(
+                isKioskEnabled = true,
+                blockSystemNavigation = true,
+                preferredLauncherPackage = ""
+            )
+        }
+        if (deviceOwnerManager.isDeviceOwner) {
+            deviceOwnerManager.setDefaultLauncher(true)
+        }
         applyConfigUpdates()
+        runOnUiThread {
+            enableImmersiveMode()
+        }
     }
 
     fun exitKioskMode() {
@@ -537,6 +597,10 @@ class MainActivity : ComponentActivity() {
                 startLockTask()
             } catch (_: Exception) {}
         }
+        // Если Kiosk не является главным лаунчером - запрашиваем выбор при повторном заходе
+        if (!deviceOwnerManager.isDefaultLauncher()) {
+            _shouldPromptLauncher.value = true
+        }
         val versionName = runCatching {
             packageManager.getPackageInfo(packageName, 0).versionName
         }.getOrNull() ?: "1.0.0"
@@ -601,14 +665,51 @@ class MainActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val config = configRepository.getConfig()
-        if (config.isKioskEnabled && config.blockHardwareKeys) {
+        if (config.isKioskEnabled) {
+            // Полная блокировка системных кнопок в режиме киоска
             when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK,
+                KeyEvent.KEYCODE_HOME,
+                KeyEvent.KEYCODE_APP_SWITCH -> return true // Блокировка Назад, Домой, Недавние
                 KeyEvent.KEYCODE_VOLUME_UP,
                 KeyEvent.KEYCODE_VOLUME_DOWN,
-                KeyEvent.KEYCODE_VOLUME_MUTE -> return true
+                KeyEvent.KEYCODE_VOLUME_MUTE -> {
+                    if (config.blockHardwareKeys) return true
+                }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        val config = configRepository.getConfig()
+        if (config.isKioskEnabled) {
+            // Если была попытка свернуть киоск кнопкой Домой или Недавние - возвращаем на экран
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            try {
+                startActivity(intent)
+            } catch (_: Exception) {}
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        val config = configRepository.getConfig()
+        if (!hasFocus) {
+            if (config.isKioskEnabled) {
+                // Закрываем шторку уведомлений и панель недавних приложений
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    val closeDialogs = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+                    sendBroadcast(closeDialogs)
+                }
+            }
+        } else {
+            enableImmersiveMode()
+        }
     }
 
     @Deprecated("Deprecated in Java")

@@ -198,9 +198,29 @@ class DeviceOwnerManager(private val context: Context) {
             }
             val mainActivityComponent = ComponentName(context, "com.kiosk.browser.MainActivity")
             if (enable) {
+                // Блокируем статус-бар и системную навигацию
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    dpm.setStatusBarDisabled(adminComponent, true)
+                }
+                // Блокируем кнопки Домой и Недавние в LockTask
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    dpm.setLockTaskFeatures(
+                        adminComponent,
+                        DevicePolicyManager.LOCK_TASK_FEATURE_NONE
+                    )
+                }
+                // Убеждаемся, что Kiosk в белом списке LockTask
+                val currentPackages = dpm.getLockTaskPackages(adminComponent).toMutableList()
+                if (!currentPackages.contains(context.packageName)) {
+                    currentPackages.add(context.packageName)
+                    dpm.setLockTaskPackages(adminComponent, currentPackages.toTypedArray())
+                }
                 dpm.addPersistentPreferredActivity(adminComponent, filter, mainActivityComponent)
             } else {
                 dpm.clearPackagePersistentPreferredActivities(adminComponent, context.packageName)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    dpm.setStatusBarDisabled(adminComponent, false)
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
